@@ -1,0 +1,12 @@
+eni:
+  enabled: true
+ipam:
+  mode: eni # Pods get real VPC IPs allocated directly from ENIs attached to the node.
+kubeProxyReplacement: true  # Entirely using eBPF.
+gatewayAPI:
+  enabled: true
+hubble: # Network visibility across the cluster.
+  relay:
+    enabled: true
+  ui:
+    enabled: true

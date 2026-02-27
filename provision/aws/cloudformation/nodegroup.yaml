@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EKS managed node group
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Project name used for resource naming
+
+  Environment:
+    Type: String
+    AllowedValues: [staging, production]
+    Description: Deployment environment
+
+  VpcStackName:
+    Type: String
+    Description: Name of the VPC CloudFormation stack to import values from
+
+  EksStackName:
+    Type: String
+    Description: Name of the EKS CloudFormation stack to import values from
+
+  NodeInstanceType:
+    Type: String
+    Default: m5.xlarge
+    Description: EC2 instance type for worker nodes
+
+  NodeDesiredCapacity:
+    Type: Number
+    Default: 2
+    Description: Desired number of worker nodes
+
+  NodeMinSize:
+    Type: Number
+    Default: 1
+    Description: Minimum number of worker nodes
+
+  NodeMaxSize:
+    Type: Number
+    Default: 4
+    Description: Maximum number of worker nodes
+
+  NodeDiskSize:
+    Type: Number
+    Default: 50
+    Description: Root disk size in GiB for each worker node
+
+Resources:
+  # -- IAM Role --
+  # EC2 nodes assume this role.
+  NodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-eks-node-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      # Cilium ENI mode requires EC2 permissions to manage network interfaces
+      # and allocate IPs directly from VPC subnets. These replace the permissions
+      # that would normally come from AmazonEKS_CNI_Policy.
+      Policies:
+        - PolicyName: CiliumENI
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceTypes
+                  - ec2:DescribeTags
+                  - ec2:DescribeRouteTables
+                  - ec2:CreateNetworkInterface
+                  - ec2:AttachNetworkInterface
+                  - ec2:DetachNetworkInterface
+                  - ec2:DeleteNetworkInterface
+                  - ec2:ModifyNetworkInterfaceAttribute
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+                  - ec2:CreateTags
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-eks-node-role
+
+  # -- Managed Node Group --
+  NodeGroup:
+    Type: AWS::EKS::Nodegroup
+    Properties:
+      ClusterName:
+        Fn::ImportValue: !Sub '${EksStackName}-ClusterName'
+      NodegroupName: !Sub ${ProjectName}-${Environment}-nodes
+      NodeRole: !GetAtt NodeRole.Arn
+      Subnets:
+        - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
+        - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet2Id'
+        - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet3Id'
+      InstanceTypes:
+        - !Ref NodeInstanceType
+      AmiType: AL2023_x86_64_STANDARD
+      DiskSize: !Ref NodeDiskSize
+      ScalingConfig:
+        DesiredSize: !Ref NodeDesiredCapacity
+        MinSize: !Ref NodeMinSize
+        MaxSize: !Ref NodeMaxSize
+      UpdateConfig:
+        MaxUnavailable: 1 # Rolling update, only 1 node down at a time.
+      Tags:
+        Name: !Sub ${ProjectName}-${Environment}-node
+
+Outputs:
+  NodeGroupName:
+    Value: !Ref NodeGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-NodeGroupName
+
+  NodeRoleArn:
+    Value: !GetAtt NodeRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-NodeRoleArn
+

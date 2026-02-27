@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EKS cluster with OIDC provider
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Project name used for resource naming
+
+  Environment:
+    Type: String
+    AllowedValues: [staging, production]
+    Description: Deployment environment
+
+  KubernetesVersion:
+    Type: String
+    Default: '1.35'
+    Description: Kubernetes version for the EKS cluster
+
+  VpcStackName:
+    Type: String
+    Description: Name of the VPC CloudFormation stack to import values from
+
+Resources:
+  # -- IAM Role --
+  ClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-eks-cluster-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com  # trust policy says only this service can assume the role
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-eks-cluster-role
+
+  # -- EKS Cluster --
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}
+      Version: !Ref KubernetesVersion
+      RoleArn: !GetAtt ClusterRole.Arn
+      ResourcesVpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
+          - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet2Id'
+          - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet3Id'
+          - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet1Id'
+          - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet2Id'
+          - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet3Id'
+        EndpointPublicAccess: true  # Let run kubectl.
+        EndpointPrivateAccess: true # Let nodes use endpoint to talk to the API server.
+      Logging:
+        ClusterLogging:
+          EnabledTypes:
+            # Minimum needed for security visibility.
+            - Type: api
+            - Type: audit
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}
+
+  # -- OIDC Provider --
+  # Enables IAM Roles for Service Accounts for pods to assume IAM roles without static creds.
+  # Needed for ESO, CNPG backup, etc.
+  OIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
+      ClientIdList:
+        - sts.amazonaws.com
+      # EKS OIDC endpoints use Amazon-managed certificates.
+      ThumbprintList:
+        - 9e99a48a9960b14926bb7f3b02e22da2b0ab7280  # Accepted for all EKS clusters across regions.
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-oidc
+
+Outputs:
+  ClusterName:
+    Value: !Ref EKSCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterName
+
+  ClusterArn:
+    Value: !GetAtt EKSCluster.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterArn
+
+  ClusterEndpoint:
+    Value: !GetAtt EKSCluster.Endpoint
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterEndpoint
+
+  ClusterSecurityGroupId:
+    Value: !GetAtt EKSCluster.ClusterSecurityGroupId
+    Export:
+      Name: !Sub ${AWS::StackName}-ClusterSecurityGroupId
+
+  OidcProviderArn:
+    Value: !Ref OIDCProvider
+    Export:
+      Name: !Sub ${AWS::StackName}-OidcProviderArn
+
+  OidcIssuerUrl:
+    Value: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
+    Export:
+      Name: !Sub ${AWS::StackName}-OidcIssuerUrl
