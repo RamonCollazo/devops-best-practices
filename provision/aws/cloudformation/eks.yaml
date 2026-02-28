@@ -68,7 +68,7 @@ Resources:
 
   # -- OIDC Provider --
   # Enables IAM Roles for Service Accounts for pods to assume IAM roles without static creds.
-  # Needed for ESO, CNPG backup, etc.
+  # Needed for CSI driver (n8n SA), CNPG backup, etc.
   OIDCProvider:
     Type: AWS::IAM::OIDCProvider
     Properties:
@@ -81,6 +81,23 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-oidc
+
+  # -- Secrets Store CSI Driver Add-on --
+  # AWS-managed add-on that installs both the CSI driver and the AWS Secrets Manager provider.
+  # Replaces manual Helm installs — AWS handles versioning and security patches.
+  # syncSecret enables secretObjects, which creates K8s Secrets from mounted secrets
+  # (required for CNPG bootstrap credentials).
+  CsiSecretsStoreAddon:
+    Type: AWS::EKS::Addon
+    DependsOn: EKSCluster
+    Properties:
+      ClusterName: !Ref EKSCluster
+      AddonName: aws-secrets-store-csi-driver-provider
+      ResolveConflicts: OVERWRITE
+      ConfigurationValues: '{"syncSecret":{"enabled":true}}'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-csi-secrets-store
 
 Outputs:
   ClusterName:

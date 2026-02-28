@@ -3,5 +3,4 @@ kind: Kustomization
 resources:
   - ../../base/cilium
   - ../../base/cert-manager
-  - ../../base/external-secrets
   - ../../base/cnpg

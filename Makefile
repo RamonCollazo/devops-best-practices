@@ -8,6 +8,7 @@ GITHUB_REPO		?= devops-best-practices
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks
 NG_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-nodegroup
+IAM_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-iam
 
 CLUSTER_NAME	= $(PROJECT_NAME)-$(ENVIRONMENT)
 
@@ -21,10 +22,10 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 					--query 'cluster.endpoint' \
 					--output text | sed 's|https://||')
 
-.PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all kubeconfig \
-				delete-nodegroup delete-eks delete-vpc \
+.PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam kubeconfig \
+				delete-nodegroup delete-eks delete-vpc delete-iam \
 				helm-repos install-cilium install-cert-manager \
-				install-external-secrets install-cnpg install-controllers \
+				install-cnpg install-controllers \
 				flux-bootstrap create-cluster-vars
 
 # -- Deploy --
@@ -60,6 +61,18 @@ deploy-nodegroup: deploy-eks
 			ProjectName=$(PROJECT_NAME) \
 			Environment=$(ENVIRONMENT) \
 			VpcStackName=$(VPC_STACK) \
+			EksStackName=$(EKS_STACK) \
+		--capabilities CAPABILITY_NAMED_IAM \
+		--region $(REGION) \
+		--no-fail-on-empty-changeset
+
+deploy-iam: deploy-eks
+	aws cloudformation deploy \
+		--stack-name $(IAM_STACK) \
+		--template-file $(CFN_DIR)/iam.yaml \
+		--parameter-overrides \
+			ProjectName=$(PROJECT_NAME) \
+			Environment=$(ENVIRONMENT) \
 			EksStackName=$(EKS_STACK) \
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(REGION) \
@@ -101,17 +114,24 @@ delete-vpc:
 		--stack-name $(VPC_STACK) \
 		--region $(REGION)
 
+delete-iam:
+	aws cloudformation delete-stack \
+		--stack-name $(IAM_STACK) \
+		--region $(REGION)
+	aws cloudformation wait stack-delete-complete \
+		--stack-name $(IAM_STACK) \
+		--region $(REGION)
+
 # -- Helm repos --
 
 helm-repos:
 	helm repo add cilium https://helm.cilium.io/
 	helm repo add jetstack https://charts.jetstack.io
-	helm repo add external-secrets https://charts.external-secrets.io
 	helm repo add cnpg https://cloudnative-pg.github.io/charts
 	helm repo update
 
 # -- Install controllers --
-# Order: cilium → deploy-nodegroup (manual) → cert-manager → external-secrets → cnpg
+# Order: cilium → deploy-nodegroup (manual) → cert-manager → cnpg
 
 install-cilium:
 	kubectl delete daemonset aws-node -n kube-system --ignore-not-found
@@ -131,13 +151,6 @@ install-cert-manager:
 		--values $(HELM_DIR)/cert-manager-values.yaml \
 		--wait
 
-install-external-secrets:
-	helm upgrade --install external-secrets external-secrets/external-secrets \
-		--namespace external-secrets \
-		--create-namespace \
-		--values $(HELM_DIR)/external-secrets-values.yaml \
-		--wait
-
 install-cnpg:
 	helm upgrade --install cnpg cnpg/cloudnative-pg \
 		--namespace cnpg-system \
@@ -146,13 +159,14 @@ install-cnpg:
 		--wait
 
 # NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
-install-controllers: helm-repos install-cilium install-cert-manager \
-					install-external-secrets install-cnpg
+# CSI driver and AWS provider are managed by Flux (not installed manually).
+install-controllers: helm-repos install-cilium install-cert-manager install-cnpg
 
 # -- GitOps --
 # Creates a ConfigMap in flux-system with cluster-specific values.
-# Run this after deploy-eks and kubeconfig, before flux-bootstrap.
+# Run this AFTER flux-bootstrap (flux-system namespace must exist first).
 create-cluster-vars:
+	kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create configmap cluster-vars \
 		--namespace flux-system \
 		--from-literal=k8sServiceHost=$(K8S_API_HOST) \
