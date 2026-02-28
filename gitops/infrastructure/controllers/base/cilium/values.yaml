@@ -5,9 +5,8 @@ ipam:
   mode: eni
 
 kubeProxyReplacement: true
-# k8sServiceHost is the EKS API server endpoint without https://.
-# Patched in the aws/staging overlay after cluster creation.
-k8sServiceHost: ""
+# Injected at reconcile time from the cluster-vars ConfigMap via Flux postBuild substitution.
+k8sServiceHost: "${k8sServiceHost}"
 k8sServicePort: 443
 
 gatewayAPI:

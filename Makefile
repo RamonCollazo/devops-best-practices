@@ -25,7 +25,7 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 				delete-nodegroup delete-eks delete-vpc \
 				helm-repos install-cilium install-cert-manager \
 				install-external-secrets install-cnpg install-controllers \
-				flux-bootstrap
+				flux-bootstrap create-cluster-vars
 
 # -- Deploy --
 
@@ -150,6 +150,15 @@ install-controllers: helm-repos install-cilium install-cert-manager \
 					install-external-secrets install-cnpg
 
 # -- GitOps --
+# Creates a ConfigMap in flux-system with cluster-specific values.
+# Run this after deploy-eks and kubeconfig, before flux-bootstrap.
+create-cluster-vars:
+	kubectl create configmap cluster-vars \
+		--namespace flux-system \
+		--from-literal=k8sServiceHost=$(K8S_API_HOST) \
+		--dry-run=client -o yaml | kubectl apply -f -
+
+
 # GITHUB_TOKEN must be set in the environment before running this target.
 # export GITHUB_TOKEN=<your-pat>
 
