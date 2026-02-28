@@ -2,6 +2,9 @@ PROJECT_NAME	?= devops-best-practice-staging
 ENVIRONMENT		?= staging
 REGION				?= us-east-1
 
+GITHUB_OWNER	?= RamonCollazo
+GITHUB_REPO		?= devops-best-practices
+
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks
 NG_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-nodegroup
@@ -21,7 +24,8 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 .PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all kubeconfig \
 				delete-nodegroup delete-eks delete-vpc \
 				helm-repos install-cilium install-cert-manager \
-				install-external-secrets install-cnpg install-controllers
+				install-external-secrets install-cnpg install-controllers \
+				flux-bootstrap
 
 # -- Deploy --
 
@@ -144,3 +148,15 @@ install-cnpg:
 # NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
 install-controllers: helm-repos install-cilium install-cert-manager \
 					install-external-secrets install-cnpg
+
+# -- GitOps --
+# GITHUB_TOKEN must be set in the environment before running this target.
+# export GITHUB_TOKEN=<your-pat>
+
+flux-bootstrap:
+	flux bootstrap github \
+		--owner=$(GITHUB_OWNER) \
+		--repository=$(GITHUB_REPO) \
+		--branch=main \
+		--path=clusters/aws/staging \
+		--personal
