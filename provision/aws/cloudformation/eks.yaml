@@ -94,7 +94,6 @@ Resources:
       ClusterName: !Ref EKSCluster
       AddonName: aws-secrets-store-csi-driver-provider
       ResolveConflicts: OVERWRITE
-      ConfigurationValues: '{"syncSecret":{"enabled":true}}'
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-csi-secrets-store
