@@ -1,3 +1,6 @@
 crds:
   enabled: true
-# Gateway API HTTP01 solver is stable in cert-manager v1.15+ — no feature gate needed.
+# GatewayAPI feature gate was removed in v1.15 (graduated to stable), but the
+# --enable-gateway-api controller flag is still required to activate the integration.
+extraArgs:
+  - --enable-gateway-api
