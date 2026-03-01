@@ -1,0 +1,15 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: acme-backup-store
+  namespace: acme
+spec:
+  configuration:
+    # Bucket name injected by Flux postBuild substitution from cluster-vars ConfigMap.
+    # Set via: make create-cluster-vars (after make deploy-s3).
+    destinationPath: s3://${cnpgBackupBucket}/acme
+    s3Credentials:
+      # Delegates credential resolution to the Pod Identity Agent — no static keys.
+      # Requires a PodIdentityAssociation linking the acme-db SA to CnpgBackupRole.
+      # Create with: make create-cnpg-backup-association NAMESPACE=acme
+      inheritFromIAMRole: true

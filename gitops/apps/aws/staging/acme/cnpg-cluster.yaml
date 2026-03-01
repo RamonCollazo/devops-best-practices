@@ -9,7 +9,8 @@ spec:
 
   storage:
     size: 5Gi
-    # Uses the default EKS storage class (gp2/gp3) provisioned by the EBS CSI driver.
+    # Explicit storage class — avoids dependency on a default storage class being set.
+    storageClassName: gp2
 
   bootstrap:
     initdb:
@@ -19,3 +20,10 @@ spec:
       # CNPG retries until the secret exists — no ordering hack needed.
       secret:
         name: acme-db-credentials
+
+  # Barman Cloud plugin for WAL archiving and base backups to S3.
+  # The ObjectStore resource (acme-backup-store) defines the destination and credentials.
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: acme-backup-store

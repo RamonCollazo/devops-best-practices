@@ -5,7 +5,9 @@ resources:
   - serviceaccount.yaml
   - secretproviderclass.yaml
   - certificate.yaml
+  - objectstore.yaml
   - cnpg-cluster.yaml
+  - scheduled-backup.yaml
   - helmrepository.yaml
   - helmrelease.yaml
   - httproute.yaml

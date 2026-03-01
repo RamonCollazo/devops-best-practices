@@ -5,12 +5,14 @@ REGION			?= us-east-1
 GITHUB_OWNER	?= RamonCollazo
 GITHUB_REPO		?= devops-best-practices
 
-GATEWAY_API_VERSION	?= v1.2.1
+GATEWAY_API_VERSION		?= v1.2.1
+BARMAN_PLUGIN_VERSION	?= v0.11.0
 
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks
 NG_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-nodegroup
 IAM_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-iam
+S3_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-s3
 
 CLUSTER_NAME	= $(PROJECT_NAME)-$(ENVIRONMENT)
 
@@ -24,11 +26,12 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 					--query 'cluster.endpoint' \
 					--output text | sed 's|https://||')
 
-.PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam kubeconfig \
-				delete-nodegroup delete-eks delete-vpc delete-iam delete-apps \
+.PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam deploy-s3 kubeconfig \
+				delete-nodegroup delete-eks delete-vpc delete-iam delete-s3 delete-apps \
 				helm-repos install-gateway-api-crds install-cilium install-cert-manager \
-				install-cnpg install-controllers \
-				flux-bootstrap create-cluster-vars create-pod-identity-association
+				install-cnpg install-barman-plugin install-controllers \
+				flux-bootstrap create-cluster-vars \
+				create-pod-identity-association create-cnpg-backup-association
 
 # -- Deploy --
 
@@ -64,6 +67,17 @@ deploy-nodegroup: deploy-eks
 			Environment=$(ENVIRONMENT) \
 			VpcStackName=$(VPC_STACK) \
 			EksStackName=$(EKS_STACK) \
+		--capabilities CAPABILITY_NAMED_IAM \
+		--region $(REGION) \
+		--no-fail-on-empty-changeset
+
+deploy-s3:
+	aws cloudformation deploy \
+		--stack-name $(S3_STACK) \
+		--template-file $(CFN_DIR)/s3.yaml \
+		--parameter-overrides \
+			ProjectName=$(PROJECT_NAME) \
+			Environment=$(ENVIRONMENT) \
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(REGION) \
 		--no-fail-on-empty-changeset
@@ -123,6 +137,15 @@ delete-iam:
 		--stack-name $(IAM_STACK) \
 		--region $(REGION)
 
+# delete-s3 must run AFTER delete-iam (iam.yaml has no S3 import; safe to run after apps gone)
+delete-s3:
+	aws cloudformation delete-stack \
+		--stack-name $(S3_STACK) \
+		--region $(REGION)
+	aws cloudformation wait stack-delete-complete \
+		--stack-name $(S3_STACK) \
+		--region $(REGION)
+
 # -- Pod Identity Association --
 # Links the SecretsReaderRole to the n8n ServiceAccount in a specific customer namespace.
 # Run once per customer: make create-pod-identity-association NAMESPACE=acme
@@ -138,6 +161,29 @@ create-pod-identity-association:
 		--namespace $(NAMESPACE) \
 		--service-account n8n \
 		--role-arn $(SECRETS_READER_ROLE_ARN) \
+		--region $(REGION)
+
+# -- CNPG Backup Pod Identity Association --
+# Links the CnpgBackupRole to the CNPG Cluster ServiceAccount (<namespace>-db) per customer.
+# Run once per customer: make create-cnpg-backup-association NAMESPACE=acme
+CNPG_BACKUP_ROLE_ARN = $(shell aws cloudformation describe-stacks \
+	--stack-name $(S3_STACK) \
+	--region $(REGION) \
+	--query 'Stacks[0].Outputs[?OutputKey==`CnpgBackupRoleArn`].OutputValue' \
+	--output text)
+
+CNPG_BACKUP_BUCKET = $(shell aws cloudformation describe-stacks \
+	--stack-name $(S3_STACK) \
+	--region $(REGION) \
+	--query 'Stacks[0].Outputs[?OutputKey==`BucketName`].OutputValue' \
+	--output text)
+
+create-cnpg-backup-association:
+	aws eks create-pod-identity-association \
+		--cluster-name $(CLUSTER_NAME) \
+		--namespace $(NAMESPACE) \
+		--service-account $(NAMESPACE)-db \
+		--role-arn $(CNPG_BACKUP_ROLE_ARN) \
 		--region $(REGION)
 
 # -- Delete apps (run before delete-nodegroup to let CSI driver clean up EBS volumes) --
@@ -187,18 +233,27 @@ install-cnpg:
 		--values $(HELM_DIR)/cnpg-values.yaml \
 		--wait
 
+# Installs the Barman Cloud plugin for CNPG (ObjectStore CRD + plugin sidecar).
+# Must run after install-cnpg so cnpg-system namespace exists.
+install-barman-plugin:
+	kubectl apply -f https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/$(BARMAN_PLUGIN_VERSION)/manifest.yaml
+	kubectl wait --for=condition=Established crd/objectstores.barmancloud.cnpg.io --timeout=60s
+
 # NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
 # CSI driver and AWS provider are managed by Flux (not installed manually).
-install-controllers: helm-repos install-cilium install-cert-manager install-cnpg
+install-controllers: helm-repos install-cilium install-cert-manager install-cnpg install-barman-plugin
 
 # -- GitOps --
 # Creates a ConfigMap in flux-system with cluster-specific values.
 # Run this AFTER flux-bootstrap (flux-system namespace must exist first).
+# Run after both deploy-eks and deploy-s3.
+# Re-run any time cluster-vars needs updating (idempotent via --dry-run + apply).
 create-cluster-vars:
 	kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create configmap cluster-vars \
 		--namespace flux-system \
 		--from-literal=k8sServiceHost=$(K8S_API_HOST) \
+		--from-literal=cnpgBackupBucket=$(CNPG_BACKUP_BUCKET) \
 		--dry-run=client -o yaml | kubectl apply -f -
 
 

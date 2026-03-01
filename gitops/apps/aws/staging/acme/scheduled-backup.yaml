@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: acme-db-backup
+  namespace: acme
+spec:
+  # Daily at 02:00 UTC. Adjust for production SLA requirements.
+  schedule: "0 2 * * *"
+  # The backup object is owned by this ScheduledBackup (cleaned up together).
+  backupOwnerReference: self
+  cluster:
+    name: acme-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

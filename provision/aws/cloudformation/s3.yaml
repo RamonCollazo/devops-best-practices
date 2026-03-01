@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket for CNPG Barman Cloud backups, one bucket per environment
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Project name used for resource naming
+
+  Environment:
+    Type: String
+    AllowedValues: [staging, production]
+    Description: Deployment environment
+
+Resources:
+  CnpgBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectName}-${Environment}-cnpg-backups-${AWS::AccountId}
+      # Block all public access — backups must never be publicly accessible.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # AES-256 encryption at rest with S3-managed keys.
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-cnpg-backups-${AWS::AccountId}
+        - Key: Environment
+          Value: !Ref Environment
+
+  # -- CNPG Backup Role --
+  # Assumed by the CNPG Cluster ServiceAccount (named after the cluster, e.g. acme-db)
+  # via EKS Pod Identity. Scoped exclusively to the backup bucket in this stack.
+  # PodIdentityAssociation per customer: make create-cnpg-backup-association NAMESPACE=acme
+  CnpgBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-cnpg-backup-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pods.eks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
+      Policies:
+        - PolicyName: CnpgS3Backup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Object-level operations — scoped to this bucket only.
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub ${CnpgBackupBucket.Arn}/*
+              # Bucket-level operations — required by Barman for listing and location checks.
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt CnpgBackupBucket.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-cnpg-backup-role
+
+Outputs:
+  BucketName:
+    Value: !Ref CnpgBackupBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-BucketName
+
+  BucketArn:
+    Value: !GetAtt CnpgBackupBucket.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-BucketArn
+
+  CnpgBackupRoleArn:
+    Value: !GetAtt CnpgBackupRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-CnpgBackupRoleArn

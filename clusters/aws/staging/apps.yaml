@@ -14,3 +14,7 @@ spec:
   timeout: 10m
   dependsOn:
     - name: infrastructure-configs
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
