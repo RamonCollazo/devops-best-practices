@@ -82,6 +82,70 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-oidc
 
+  # -- EBS CSI Driver --
+  # Required for any workload that needs persistent volumes (e.g. CNPG database clusters).
+  # The driver runs as a DaemonSet in kube-system and uses IRSA to call EC2/EBS APIs.
+  EbsCsiDriverRole:
+    Type: AWS::IAM::Role
+    DependsOn: OIDCProvider
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-ebs-csi-driver-role
+      AssumeRolePolicyDocument:
+        Fn::Sub:
+          - |
+            {
+              "Version": "2012-10-17",
+              "Statement": [{
+                "Effect": "Allow",
+                "Principal": { "Federated": "${OidcProviderArn}" },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": {
+                  "StringEquals": {
+                    "${OidcIssuer}:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa",
+                    "${OidcIssuer}:aud": "sts.amazonaws.com"
+                  }
+                }
+              }]
+            }
+          - OidcProviderArn: !Ref OIDCProvider
+            OidcIssuer:
+              Fn::Select:
+                - 1
+                - Fn::Split:
+                    - 'https://'
+                    - !GetAtt EKSCluster.OpenIdConnectIssuerUrl
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-ebs-csi-driver-role
+
+  EbsCsiDriverAddon:
+    Type: AWS::EKS::Addon
+    DependsOn: EbsCsiDriverRole
+    Properties:
+      ClusterName: !Ref EKSCluster
+      AddonName: aws-ebs-csi-driver
+      ServiceAccountRoleArn: !GetAtt EbsCsiDriverRole.Arn
+      ResolveConflicts: OVERWRITE
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-ebs-csi-driver
+
+  # -- Pod Identity Agent --
+  # Required for EKS Pod Identity — runs as a DaemonSet on each node and provides
+  # short-lived credentials to pods based on PodIdentityAssociation resources.
+  PodIdentityAgentAddon:
+    Type: AWS::EKS::Addon
+    DependsOn: EKSCluster
+    Properties:
+      ClusterName: !Ref EKSCluster
+      AddonName: eks-pod-identity-agent
+      ResolveConflicts: OVERWRITE
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-pod-identity-agent
+
   # -- Secrets Store CSI Driver Add-on --
   # AWS-managed add-on that installs both the CSI driver and the AWS Secrets Manager provider.
   # Replaces manual Helm installs — AWS handles versioning and security patches.

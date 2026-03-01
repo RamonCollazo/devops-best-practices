@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: IAM roles for IRSA, grants pods cloud permissions without static credentials
+Description: IAM roles for EKS Pod Identity, grants pods cloud permissions without static credentials
 
 Parameters:
   ProjectName:
@@ -11,50 +11,26 @@ Parameters:
     AllowedValues: [staging, production]
     Description: Deployment environment
 
-  EksStackName:
-    Type: String
-    Description: Name of the EKS CloudFormation stack to import OIDC values from
-
 Resources:
   # -- Secrets Reader Role --
-  # Assumed by app ServiceAccounts (e.g. n8n) via IRSA.
-  # The CSI driver reads the pod's projected SA token and exchanges it for AWS credentials.
-  # StringLike with wildcard allows any SA named 'n8n' across all customer namespaces
-  # without needing one role per customer.
+  # Assumed by app ServiceAccounts (e.g. n8n) via EKS Pod Identity.
+  # The Pod Identity Agent on each node exchanges the pod's identity for short-lived
+  # AWS credentials — no OIDC provider or SA annotation required.
+  # PodIdentityAssociations (one per customer namespace) link this role to the n8n SA.
+  # Create associations with: make create-pod-identity-association NAMESPACE=<customer>
   SecretsReaderRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub ${ProjectName}-${Environment}-secrets-reader-role
       AssumeRolePolicyDocument:
-        # JSON literal required: YAML drops duplicate keys, so both :sub and :aud conditions
-        # must live in one Fn::Sub. Fn::Split strips the https:// prefix from the issuer URL
-        # because IAM condition keys expect the bare hostname (no protocol).
-        Fn::Sub:
-          - |
-            {
-              "Version": "2012-10-17",
-              "Statement": [{
-                "Effect": "Allow",
-                "Principal": { "Federated": "${OidcProviderArn}" },
-                "Action": "sts:AssumeRoleWithWebIdentity",
-                "Condition": {
-                  "StringEquals": {
-                    "${OidcIssuer}:aud": "sts.amazonaws.com"
-                  },
-                  "StringLike": {
-                    "${OidcIssuer}:sub": "system:serviceaccount:*:n8n"
-                  }
-                }
-              }]
-            }
-          - OidcProviderArn:
-              Fn::ImportValue: !Sub '${EksStackName}-OidcProviderArn'
-            OidcIssuer:
-              Fn::Select:
-                - 1
-                - Fn::Split:
-                    - 'https://'
-                    - Fn::ImportValue: !Sub '${EksStackName}-OidcIssuerUrl'
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pods.eks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+              - sts:TagSession
       Policies:
         - PolicyName: SecretsManagerReadOnly
           PolicyDocument:
@@ -74,4 +50,4 @@ Outputs:
   SecretsReaderRoleArn:
     Value: !GetAtt SecretsReaderRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-SecretsReaderRoleArn # annotated on n8n ServiceAccount
+      Name: !Sub ${AWS::StackName}-SecretsReaderRoleArn

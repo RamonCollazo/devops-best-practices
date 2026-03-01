@@ -1,0 +1,38 @@
+# Use external CNPG cluster instead of the bundled Bitnami PostgreSQL.
+postgresql:
+  enabled: false
+
+db:
+  type: postgresdb
+
+externalPostgresql:
+  host: acme-db-rw   # CNPG read-write service in the same namespace
+  port: 5432
+  database: n8n
+  username: n8n
+  # Secret created by the CSI driver when the pod first mounts the volume.
+  # The chart reads the "password" key from this secret.
+  existingSecret: acme-n8n-db
+
+# Secret created by CSI driver. Loaded via envFrom — all keys become env vars.
+# Key N8N_ENCRYPTION_KEY is read directly by n8n from the environment.
+existingEncryptionKeySecret: acme-n8n-secrets
+
+serviceAccount:
+  create: true
+  name: n8n
+
+# Mount the CSI volume to trigger SecretProviderClass reconciliation and K8s Secret
+# creation (acme-db-credentials for CNPG, acme-n8n-db and acme-n8n-secrets for n8n).
+volumes:
+  - name: secrets-store
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: acme-secrets
+
+volumeMounts:
+  - name: secrets-store
+    mountPath: /mnt/secrets-store
+    readOnly: true

@@ -1,2 +1,5 @@
 crds:
   enabled: true
+
+# Enable Gateway API HTTP01 solver support (cert-manager v1.15+).
+featureGates: "GatewayAPI=true"

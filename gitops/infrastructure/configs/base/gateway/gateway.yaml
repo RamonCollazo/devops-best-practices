@@ -1,0 +1,34 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared-gateway
+  namespace: shared-gateway
+spec:
+  gatewayClassName: cilium
+  listeners:
+    # HTTP listener — used by cert-manager for HTTP01 ACME challenges.
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              shared-gateway: "true"
+    # HTTPS listener — serves app traffic with TLS terminated at the Gateway.
+    # The acme-tls secret is created by cert-manager in this namespace.
+    # Phase 4: replace per-customer certs with a wildcard cert + DNS01/Route53.
+    - name: https
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: acme-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              shared-gateway: "true"

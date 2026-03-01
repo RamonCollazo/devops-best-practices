@@ -1,9 +1,11 @@
-PROJECT_NAME	?= devops-best-practice-staging
+PROJECT_NAME		?= devops-best-practice
 ENVIRONMENT		?= staging
-REGION				?= us-east-1
+REGION			?= us-east-1
 
 GITHUB_OWNER	?= RamonCollazo
 GITHUB_REPO		?= devops-best-practices
+
+GATEWAY_API_VERSION	?= v1.2.1
 
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks
@@ -23,10 +25,10 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 					--output text | sed 's|https://||')
 
 .PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam kubeconfig \
-				delete-nodegroup delete-eks delete-vpc delete-iam \
-				helm-repos install-cilium install-cert-manager \
+				delete-nodegroup delete-eks delete-vpc delete-iam delete-apps \
+				helm-repos install-gateway-api-crds install-cilium install-cert-manager \
 				install-cnpg install-controllers \
-				flux-bootstrap create-cluster-vars
+				flux-bootstrap create-cluster-vars create-pod-identity-association
 
 # -- Deploy --
 
@@ -73,7 +75,6 @@ deploy-iam: deploy-eks
 		--parameter-overrides \
 			ProjectName=$(PROJECT_NAME) \
 			Environment=$(ENVIRONMENT) \
-			EksStackName=$(EKS_STACK) \
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(REGION) \
 		--no-fail-on-empty-changeset
@@ -122,6 +123,29 @@ delete-iam:
 		--stack-name $(IAM_STACK) \
 		--region $(REGION)
 
+# -- Pod Identity Association --
+# Links the SecretsReaderRole to the n8n ServiceAccount in a specific customer namespace.
+# Run once per customer: make create-pod-identity-association NAMESPACE=acme
+SECRETS_READER_ROLE_ARN = $(shell aws cloudformation describe-stacks \
+	--stack-name $(IAM_STACK) \
+	--region $(REGION) \
+	--query 'Stacks[0].Outputs[?OutputKey==`SecretsReaderRoleArn`].OutputValue' \
+	--output text)
+
+create-pod-identity-association:
+	aws eks create-pod-identity-association \
+		--cluster-name $(CLUSTER_NAME) \
+		--namespace $(NAMESPACE) \
+		--service-account n8n \
+		--role-arn $(SECRETS_READER_ROLE_ARN) \
+		--region $(REGION)
+
+# -- Delete apps (run before delete-nodegroup to let CSI driver clean up EBS volumes) --
+
+delete-apps:
+	kubectl delete clusters.postgresql.cnpg.io --all --all-namespaces --ignore-not-found
+	kubectl wait --for=delete pvc --all --all-namespaces --timeout=180s || true
+
 # -- Helm repos --
 
 helm-repos:
@@ -131,7 +155,12 @@ helm-repos:
 	helm repo update
 
 # -- Install controllers --
-# Order: cilium → deploy-nodegroup (manual) → cert-manager → cnpg
+# Order: install-gateway-api-crds → cilium → deploy-nodegroup (manual) → cert-manager → cnpg
+
+install-gateway-api-crds:
+	kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
+	kubectl wait --for=condition=Established crd/gateways.gateway.networking.k8s.io --timeout=60s
+	kubectl wait --for=condition=Established crd/httproutes.gateway.networking.k8s.io --timeout=60s
 
 install-cilium:
 	kubectl delete daemonset aws-node -n kube-system --ignore-not-found

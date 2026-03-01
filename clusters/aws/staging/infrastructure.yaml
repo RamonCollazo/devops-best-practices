@@ -29,5 +29,7 @@ spec:
     name: flux-system
   path: ./gitops/infrastructure/configs/aws/staging
   prune: true
+  wait: true
+  timeout: 5m
   dependsOn:
     - name: infrastructure-controllers

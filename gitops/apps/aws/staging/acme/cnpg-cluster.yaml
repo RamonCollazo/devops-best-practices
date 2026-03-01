@@ -1,0 +1,21 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: acme-db
+  namespace: acme
+spec:
+  # 1 instance for staging; increase to 3 for production HA.
+  instances: 1
+
+  storage:
+    size: 5Gi
+    # Uses the default EKS storage class (gp2/gp3) provisioned by the EBS CSI driver.
+
+  bootstrap:
+    initdb:
+      database: n8n
+      owner: n8n
+      # Secret is created by the CSI driver when the n8n pod first mounts the volume.
+      # CNPG retries until the secret exists — no ordering hack needed.
+      secret:
+        name: acme-db-credentials
