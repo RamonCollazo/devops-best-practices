@@ -11,7 +11,7 @@ externalPostgresql:
   database: n8n
   username: n8n
   # Secret created by the CSI driver when the pod first mounts the volume.
-  # The chart reads the "password" key from this secret.
+  # The chart reads the "postgres-password" key from this secret.
   existingSecret: acme-n8n-db
 
 # Secret created by CSI driver. Loaded via envFrom — all keys become env vars.
