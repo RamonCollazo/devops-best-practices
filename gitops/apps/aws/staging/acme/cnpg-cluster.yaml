@@ -10,7 +10,7 @@ spec:
   storage:
     size: 5Gi
     # Explicit storage class — avoids dependency on a default storage class being set.
-    storageClassName: gp2
+    storageClass: gp2
 
   bootstrap:
     initdb:
