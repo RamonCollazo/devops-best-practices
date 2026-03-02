@@ -76,8 +76,7 @@ make deploy-nodegroup
 # 9. IAM roles (SecretsReaderRole)
 make deploy-iam
 
-# 10. Controllers
-make install-cert-manager
+# 10. Controllers (cert-manager is Flux-managed — do NOT install manually)
 make install-cnpg
 make install-barman-plugin
 
@@ -111,7 +110,7 @@ make create-cnpg-backup-association NAMESPACE=<customer>
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PROJECT_NAME` | `devops-best-practice` | Used in all resource and stack names |
+| `PROJECT_NAME` | `devops-best-practices` | Used in all resource and stack names |
 | `ENVIRONMENT` | `staging` | `staging` or `production` |
 | `REGION` | `us-east-1` | AWS region |
 | `GATEWAY_API_VERSION` | `v1.2.1` | Gateway API CRD version |
