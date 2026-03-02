@@ -1,23 +1,23 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-dns
   namespace: acme
 spec:
   # All pods in the namespace need DNS resolution.
-  podSelector: {}
-  policyTypes:
-    - Egress
+  # Cilium injects io.kubernetes.pod.namespace into every endpoint identity,
+  # so fromEndpoints/toEndpoints can match by namespace without a separate
+  # namespaceSelector. Both labels in the matchLabels entry are ANDed,
+  # selecting only kube-dns pods inside kube-system.
+  endpointSelector: {}
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP

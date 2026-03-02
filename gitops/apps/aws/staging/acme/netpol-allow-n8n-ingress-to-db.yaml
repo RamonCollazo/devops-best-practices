@@ -1,5 +1,5 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-n8n-ingress-to-db
   namespace: acme
@@ -7,16 +7,14 @@ spec:
   # The default-deny policy blocks all ingress including to CNPG pods.
   # This policy pairs with allow-n8n-to-db (egress side) to complete the
   # bidirectional allow for PostgreSQL connections from n8n to acme-db.
-  podSelector:
+  endpointSelector:
     matchLabels:
       cnpg.io/cluster: acme-db
-  policyTypes:
-    - Ingress
   ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: n8n
-      ports:
-        - protocol: TCP
-          port: 5432
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: n8n
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

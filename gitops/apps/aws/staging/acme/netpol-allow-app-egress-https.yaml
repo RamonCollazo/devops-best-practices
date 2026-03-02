@@ -1,19 +1,20 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-app-egress-https
   namespace: acme
 spec:
-  podSelector:
+  endpointSelector:
     matchLabels:
       app.kubernetes.io/name: n8n
-  policyTypes:
-    - Egress
   egress:
     # Allow HTTPS egress for application workloads that call external APIs.
-    # This is required for workflow automation tools and also covers the
-    # Pod Identity credential endpoint (169.254.170.23) which uses link-local
-    # addressing and is not subject to NetworkPolicy enforcement.
-    - ports:
-        - protocol: TCP
-          port: 443
+    # toEntities: [world] covers all destinations outside the cluster boundary.
+    # The Pod Identity credential endpoint (169.254.170.23) uses link-local
+    # addressing which is outside NetworkPolicy scope and is always reachable.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP

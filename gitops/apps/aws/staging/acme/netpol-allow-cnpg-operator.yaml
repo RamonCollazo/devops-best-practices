@@ -1,5 +1,5 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-cnpg-operator
   namespace: acme
@@ -9,16 +9,16 @@ spec:
   # for health checks, status extraction, and lifecycle management. Without this
   # policy the default-deny rule blocks the operator and causes "HTTP communication
   # issue" errors on the Cluster resource.
-  podSelector:
+  # Cilium's io.kubernetes.pod.namespace label is automatically injected into every
+  # endpoint identity, so toEndpoints/fromEndpoints can match by namespace directly.
+  endpointSelector:
     matchLabels:
       cnpg.io/cluster: acme-db
-  policyTypes:
-    - Ingress
   ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cnpg-system
-      ports:
-        - protocol: TCP
-          port: 8000
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
