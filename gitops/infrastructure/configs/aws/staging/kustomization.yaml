@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - ../../base/gateway
   - ../../base/cluster-issuer
+  - ../../base/storageclass

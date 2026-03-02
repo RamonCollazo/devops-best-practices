@@ -1,0 +1,17 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp2-encrypted
+  annotations:
+    # Set as the cluster default so any PVC without an explicit storageClassName
+    # gets an encrypted volume automatically.
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp2
+  # Encrypt the EBS volume with the account's default EBS KMS key.
+  # To use a customer-managed key add: kmsKeyId: <key-arn>
+  encrypted: "true"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

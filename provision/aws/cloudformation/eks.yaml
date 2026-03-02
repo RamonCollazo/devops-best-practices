@@ -29,6 +29,38 @@ Parameters:
       Set in Makefile via ADMIN_ROLE_ARN; override with: export ADMIN_ROLE_ARN=<arn>
 
 Resources:
+  # -- KMS Key for etcd Secret Encryption --
+  # Encrypts all Kubernetes Secret objects at rest in etcd using envelope encryption.
+  # EKS wraps each secret with a data encryption key (DEK) that is itself encrypted by
+  # this CMK. Annual automatic rotation re-encrypts future DEKs; existing secrets are
+  # re-encrypted on next write. EKS creates a KMS grant on this key automatically when
+  # EncryptionConfig is applied.
+  EtcdEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'EKS etcd secret encryption - ${ProjectName}-${Environment}'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          # Root account statement is required by AWS KMS. It delegates key administration
+          # to IAM policies rather than embedding permissions in the key policy directly.
+          - Sid: EnableRootAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-eks-etcd
+
+  EtcdEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-eks-etcd'
+      TargetKeyId: !Ref EtcdEncryptionKey
+
   # -- IAM Role --
   ClusterRole:
     Type: AWS::IAM::Role
@@ -64,6 +96,14 @@ Resources:
       AccessConfig:
         AuthenticationMode: API
         BootstrapClusterCreatorAdminPermissions: false
+      # Envelope encryption for Kubernetes Secrets stored in etcd.
+      # EKS uses the KMS key to encrypt a per-secret data encryption key (DEK).
+      # Only the Secrets resource type is encrypted; ConfigMaps and other objects are not.
+      EncryptionConfig:
+        - Provider:
+            KeyArn: !GetAtt EtcdEncryptionKey.Arn
+          Resources:
+            - secrets
       ResourcesVpcConfig:
         SubnetIds:
           - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
@@ -227,3 +267,8 @@ Outputs:
     Value: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
     Export:
       Name: !Sub ${AWS::StackName}-OidcIssuerUrl
+
+  EtcdEncryptionKeyArn:
+    Value: !GetAtt EtcdEncryptionKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EtcdEncryptionKeyArn
