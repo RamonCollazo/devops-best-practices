@@ -140,6 +140,21 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-oidc
 
+  # -- CoreDNS Add-on --
+  # BootstrapSelfManagedAddons: false skips all default add-ons including CoreDNS.
+  # CoreDNS must be installed explicitly as a managed add-on so that in-cluster DNS
+  # works. Pods stay Pending until nodes join; the add-on itself registers immediately.
+  CoreDnsAddon:
+    Type: AWS::EKS::Addon
+    DependsOn: EKSCluster
+    Properties:
+      ClusterName: !Ref EKSCluster
+      AddonName: coredns
+      ResolveConflicts: OVERWRITE
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-coredns
+
   # -- EBS CSI Driver --
   # Required for any workload that needs persistent volumes (e.g. CNPG database clusters).
   # The driver runs as a DaemonSet in kube-system and uses IRSA to call EC2/EBS APIs.

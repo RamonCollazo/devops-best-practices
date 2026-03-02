@@ -9,9 +9,12 @@ GATEWAY_API_VERSION		?= v1.2.1
 BARMAN_PLUGIN_VERSION	?= v0.11.0
 
 # IAM principal that receives cluster-admin via an EKS Access Entry.
-# Defaults to the current AWS identity. For assumed-role sessions (SSO, CI/CD)
-# pass the role ARN explicitly: export ADMIN_ROLE_ARN=arn:aws:iam::<account>:role/<name>
-ADMIN_ROLE_ARN		?= $(shell aws sts get-caller-identity --query 'Arn' --output text)
+# Auto-converts assumed-role ARNs (SSO/CI) to IAM role ARNs, which is what
+# EKS Access Entries require. Example conversion:
+#   arn:aws:sts::123:assumed-role/MyRole/session -> arn:aws:iam::123:role/MyRole
+# Override with: export ADMIN_ROLE_ARN=arn:aws:iam::<account>:role/<name>
+ADMIN_ROLE_ARN		?= $(shell aws sts get-caller-identity --query 'Arn' --output text \
+					| sed 's|arn:aws:sts::\([0-9]*\):assumed-role/\([^/]*\)/.*|arn:aws:iam::\1:role/\2|')
 
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks

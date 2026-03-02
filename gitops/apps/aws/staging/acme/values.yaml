@@ -45,20 +45,6 @@ securityContext:
       - ALL
   readOnlyRootFilesystem: true
 
-# Writable scratch space for n8n runtime files (temp uploads, cached data).
-# The actual workflow and credential data lives in the external CNPG database.
-extraVolumes:
-  - name: n8n-data
-    emptyDir: {}
-  - name: tmp
-    emptyDir: {}
-
-extraVolumeMounts:
-  - name: n8n-data
-    mountPath: /home/node/.n8n
-  - name: tmp
-    mountPath: /tmp
-
 # Resource requests and limits prevent a single n8n instance from starving other
 # workloads or triggering node eviction. Adjust limits based on workflow load.
 resources:
@@ -71,6 +57,7 @@ resources:
 
 # Mount the CSI volume to trigger SecretProviderClass reconciliation and K8s Secret
 # creation (acme-db-credentials for CNPG, acme-n8n-db and acme-n8n-secrets for n8n).
+# emptyDir volumes provide writable scratch space required by readOnlyRootFilesystem: true.
 volumes:
   - name: secrets-store
     csi:
@@ -78,8 +65,16 @@ volumes:
       readOnly: true
       volumeAttributes:
         secretProviderClass: acme-secrets
+  - name: n8n-data
+    emptyDir: {}
+  - name: tmp
+    emptyDir: {}
 
 volumeMounts:
   - name: secrets-store
     mountPath: /mnt/secrets-store
     readOnly: true
+  - name: n8n-data
+    mountPath: /home/node/.n8n
+  - name: tmp
+    mountPath: /tmp

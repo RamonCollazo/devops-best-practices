@@ -17,6 +17,7 @@ resources:
   - netpol-allow-n8n-to-db.yaml
   - netpol-allow-app-egress-https.yaml
   - netpol-allow-cnpg-egress-https.yaml
+  - netpol-allow-cnpg-operator.yaml
 configMapGenerator:
   - name: n8n-values
     namespace: acme

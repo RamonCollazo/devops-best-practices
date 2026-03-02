@@ -46,13 +46,16 @@ Parameters:
 
 Resources:
   # -- Launch Template --
-  # A minimal launch template used solely to enforce IMDSv2 on every node.
+  # Enforces IMDSv2 and configures the Bottlerocket data volume on every node.
   # HttpTokens: required  - disables IMDSv1 (PUT-based token flow only).
   # HttpPutResponseHopLimit: 2 - needed so containers can reach the IMDS endpoint
   #   through the node's network namespace (IMDSv1 default was 1, which blocks containers).
   # HttpEndpoint: enabled - IMDS must remain on; the Pod Identity Agent relies on it to
   #   exchange pod identities for short-lived AWS credentials.
-  # AmiType and DiskSize stay in the NodeGroup (not the LT) to keep the template minimal.
+  # BlockDeviceMappings: when a launch template is attached to a managed node group,
+  #   EKS requires disk size to be specified here rather than on the NodeGroup directly.
+  #   /dev/xvdb is the Bottlerocket data partition (container images, runtime data).
+  #   Encrypted: true ensures data at rest on every node volume is protected.
   NodeLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -62,6 +65,13 @@ Resources:
           HttpEndpoint: enabled
           HttpTokens: required
           HttpPutResponseHopLimit: 2
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvdb
+            Ebs:
+              VolumeSize: !Ref NodeDiskSize
+              VolumeType: gp3
+              DeleteOnTermination: true
+              Encrypted: true
 
   # -- IAM Role --
   # EC2 nodes assume this role.
@@ -133,7 +143,6 @@ Resources:
       # OS partition read-only. It does not include a package manager or shell -
       # host access is via the SSM-backed admin container only.
       AmiType: BOTTLEROCKET_x86_64
-      DiskSize: !Ref NodeDiskSize
       LaunchTemplate:
         Id: !Ref NodeLaunchTemplate
         Version: !GetAtt NodeLaunchTemplate.LatestVersionNumber
