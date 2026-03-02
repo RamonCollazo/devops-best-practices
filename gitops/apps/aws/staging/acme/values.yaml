@@ -79,6 +79,8 @@ volumes:
         secretProviderClass: acme-secrets
   - name: n8n-data
     emptyDir: {}
+  - name: n8n-cache
+    emptyDir: {}
   - name: tmp
     emptyDir: {}
 
@@ -88,5 +90,7 @@ volumeMounts:
     readOnly: true
   - name: n8n-data
     mountPath: /home/node/.n8n
+  - name: n8n-cache
+    mountPath: /home/node/.cache
   - name: tmp
     mountPath: /tmp
