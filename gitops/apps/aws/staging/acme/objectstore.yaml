@@ -9,7 +9,7 @@ spec:
     # Set via: make create-cluster-vars (after make deploy-s3).
     destinationPath: s3://${cnpgBackupBucket}/acme
     s3Credentials:
-      # Delegates credential resolution to the Pod Identity Agent — no static keys.
+      # Delegates credential resolution to the Pod Identity Agent - no static keys.
       # Requires a PodIdentityAssociation linking the acme-db SA to CnpgBackupRole.
       # Create with: make create-cnpg-backup-association NAMESPACE=acme
       inheritFromIAMRole: true

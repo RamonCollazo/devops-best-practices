@@ -14,12 +14,14 @@ externalPostgresql:
   # The chart reads the "postgres-password" key from this secret.
   existingSecret: acme-n8n-db
 
-# Secret created by CSI driver. Loaded via envFrom — all keys become env vars.
+# Secret created by CSI driver. Loaded via envFrom - all keys become env vars.
 # Key N8N_ENCRYPTION_KEY is read directly by n8n from the environment.
 existingEncryptionKeySecret: acme-n8n-secrets
 
 serviceAccount:
-  create: true
+  # Managed by serviceaccount.yaml (Kustomize) so we can set automountServiceAccountToken: false.
+  # Helm does not support that field, so we own the SA and tell the chart not to create one.
+  create: false
   name: n8n
 
 # Mount the CSI volume to trigger SecretProviderClass reconciliation and K8s Secret

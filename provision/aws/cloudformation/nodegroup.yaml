@@ -45,6 +45,24 @@ Parameters:
     Description: Root disk size in GiB for each worker node
 
 Resources:
+  # -- Launch Template --
+  # A minimal launch template used solely to enforce IMDSv2 on every node.
+  # HttpTokens: required  - disables IMDSv1 (PUT-based token flow only).
+  # HttpPutResponseHopLimit: 2 - needed so containers can reach the IMDS endpoint
+  #   through the node's network namespace (IMDSv1 default was 1, which blocks containers).
+  # HttpEndpoint: enabled - IMDS must remain on; the Pod Identity Agent relies on it to
+  #   exchange pod identities for short-lived AWS credentials.
+  # AmiType and DiskSize stay in the NodeGroup (not the LT) to keep the template minimal.
+  NodeLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${ProjectName}-${Environment}-node-lt
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+          HttpPutResponseHopLimit: 2
+
   # -- IAM Role --
   # EC2 nodes assume this role.
   NodeRole:
@@ -107,6 +125,9 @@ Resources:
         - !Ref NodeInstanceType
       AmiType: AL2023_x86_64_STANDARD
       DiskSize: !Ref NodeDiskSize
+      LaunchTemplate:
+        Id: !Ref NodeLaunchTemplate
+        Version: !GetAtt NodeLaunchTemplate.LatestVersionNumber
       ScalingConfig:
         DesiredSize: !Ref NodeDesiredCapacity
         MinSize: !Ref NodeMinSize

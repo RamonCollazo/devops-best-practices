@@ -16,7 +16,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${ProjectName}-${Environment}-cnpg-backups-${AWS::AccountId}
-      # Block all public access — backups must never be publicly accessible.
+      # Block all public access - backups must never be publicly accessible.
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -55,14 +55,14 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Object-level operations — scoped to this bucket only.
+              # Object-level operations - scoped to this bucket only.
               - Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:DeleteObject
                 Resource: !Sub ${CnpgBackupBucket.Arn}/*
-              # Bucket-level operations — required by Barman for listing and location checks.
+              # Bucket-level operations - required by Barman for listing and location checks.
               - Effect: Allow
                 Action:
                   - s3:ListBucket

@@ -13,7 +13,7 @@ Reference implementation for a consistent GitOps-driven stack: CNI, TLS, databas
 
 ---
 
-## Architecture — AWS
+## Architecture - AWS
 
 ### Technology stack
 
@@ -22,7 +22,7 @@ Reference implementation for a consistent GitOps-driven stack: CNI, TLS, databas
 | CNI | Cilium (ENI mode, kube-proxy replacement, Gateway API) |
 | GitOps | Flux v2 |
 | Secrets | Secrets Store CSI Driver (EKS managed add-on) + EKS Pod Identity |
-| Ingress | Kubernetes Gateway API — shared Gateway in `shared-gateway` namespace |
+| Ingress | Kubernetes Gateway API - shared Gateway in `shared-gateway` namespace |
 | TLS | cert-manager + Let's Encrypt (HTTP01 via GatewayHTTPRoute) |
 | Database | CloudNativePG (CNPG) |
 | DB Backups | Barman Cloud plugin → S3 (per environment) |
@@ -38,8 +38,8 @@ Templates live under `provision/aws/cloudformation/`:
 | `vpc.yaml` | VPC, public/private subnets across 3 AZs, NAT Gateways, route tables |
 | `eks.yaml` | EKS cluster, cluster IAM role, OIDC provider, EBS CSI driver (IRSA + add-on), Pod Identity agent add-on, Secrets Store CSI add-on |
 | `nodegroup.yaml` | Managed node group (AL2023, m5.xlarge, private subnets), node IAM role, Cilium ENI inline policy |
-| `iam.yaml` | `SecretsReaderRole` — Pod Identity role for n8n pods to read from Secrets Manager |
-| `s3.yaml` | Per-environment backup bucket + `CnpgBackupRole` — Pod Identity role for CNPG pods to write backups |
+| `iam.yaml` | `SecretsReaderRole` - Pod Identity role for n8n pods to read from Secrets Manager |
+| `s3.yaml` | Per-environment backup bucket + `CnpgBackupRole` - Pod Identity role for CNPG pods to write backups |
 
 > **Pod Identity** is used instead of IRSA for all app-level roles. No SA annotations required.
 > PodIdentityAssociations are created imperatively per customer via Makefile targets.
@@ -64,19 +64,19 @@ make kubeconfig
 # 5. Add Helm repos
 make helm-repos
 
-# 6. Gateway API CRDs — must run before Cilium
+# 6. Gateway API CRDs - must run before Cilium
 make install-gateway-api-crds
 
-# 7. Install Cilium — must run before nodes join
+# 7. Install Cilium - must run before nodes join
 make install-cilium
 
-# 8. Node group — nodes join and get networking from Cilium
+# 8. Node group - nodes join and get networking from Cilium
 make deploy-nodegroup
 
 # 9. IAM roles (SecretsReaderRole)
 make deploy-iam
 
-# 10. Controllers (cert-manager is Flux-managed — do NOT install manually)
+# 10. Controllers (cert-manager is Flux-managed - do NOT install manually)
 make install-cnpg
 make install-barman-plugin
 
@@ -104,7 +104,7 @@ make create-cnpg-backup-association NAMESPACE=<customer>
 > in `NotReady` indefinitely. Always run `install-cilium` before `deploy-nodegroup`.
 
 > **Note:** Do not run `make install-cert-manager` after `flux-bootstrap`. Flux owns
-> cert-manager from that point — running it again creates a conflicting Helm release.
+> cert-manager from that point - running it again creates a conflicting Helm release.
 
 ### Makefile variables
 
@@ -146,7 +146,7 @@ Managed by Flux from `gitops/infrastructure/`.
 | `jetstack/cert-manager` v1.19.4 | `cert-manager` | `--enable-gateway-api` flag, Flux-managed only |
 | `cnpg/cloudnative-pg` v0.27.1 | `cnpg-system` | PostgreSQL operator |
 
-CSI driver and AWS provider are EKS managed add-ons — no Helm chart needed.
+CSI driver and AWS provider are EKS managed add-ons - no Helm chart needed.
 Barman Cloud plugin is installed via `make install-barman-plugin` (raw manifest, no Helm).
 
 ### Configs (`infrastructure-configs`)
@@ -156,11 +156,11 @@ Barman Cloud plugin is installed via `make install-barman-plugin` (raw manifest,
 | `Gateway` | `shared-gateway` | Shared Cilium Gateway, HTTP (80) + HTTPS (443) listeners, namespace selector |
 | `ClusterIssuer` | cluster-scoped | Let's Encrypt via HTTP01 over GatewayHTTPRoute |
 
-**Cilium** runs in ENI mode — pods get real VPC IPs. `aws-node` and `kube-proxy` DaemonSets are deleted on install.
+**Cilium** runs in ENI mode - pods get real VPC IPs. `aws-node` and `kube-proxy` DaemonSets are deleted on install.
 
 **cert-manager** issues TLS certs via Let's Encrypt HTTP01. The solver HTTPRoute is created in `shared-gateway` namespace, which must carry label `shared-gateway: "true"` to attach to the Gateway.
 
-**Secrets Store CSI Driver** mounts secrets from AWS Secrets Manager as files and syncs them as Kubernetes Secrets. No static credentials are stored in etcd — Pod Identity injects short-lived AWS credentials at runtime.
+**Secrets Store CSI Driver** mounts secrets from AWS Secrets Manager as files and syncs them as Kubernetes Secrets. No static credentials are stored in etcd - Pod Identity injects short-lived AWS credentials at runtime.
 
 **CloudNativePG** manages PostgreSQL clusters. WAL archiving and base backups are handled by the Barman Cloud plugin, writing to S3 with Pod Identity credentials.
 
@@ -190,7 +190,7 @@ gitops/
 infrastructure-controllers  →  infrastructure-configs  →  apps
 ```
 
-All Kustomizations use `wait: true` — the chain only advances when the previous layer is healthy.
+All Kustomizations use `wait: true` - the chain only advances when the previous layer is healthy.
 
 ### Bootstrap
 
@@ -213,7 +213,7 @@ kubectl get pods -A
 
 ---
 
-## App Stack — per customer
+## App Stack - per customer
 
 Each customer gets an isolated namespace with a dedicated n8n instance and CNPG database.
 `gitops/apps/aws/staging/acme/` is the reference implementation.
@@ -221,15 +221,15 @@ Each customer gets an isolated namespace with a dedicated n8n instance and CNPG 
 | Manifest | What it creates |
 |----------|----------------|
 | `namespace.yaml` | Customer namespace with `shared-gateway: "true"` label |
-| `serviceaccount.yaml` | n8n SA (no annotation — Pod Identity injects credentials) |
-| `secretproviderclass.yaml` | CSI SecretProviderClass — pulls 3 secrets from Secrets Manager into K8s Secrets |
-| `objectstore.yaml` | Barman `ObjectStore` — S3 backup destination, credentials via Pod Identity |
-| `cnpg-cluster.yaml` | CNPG Cluster — bootstraps from CSI secret, Barman plugin enabled |
+| `serviceaccount.yaml` | n8n SA (no annotation - Pod Identity injects credentials) |
+| `secretproviderclass.yaml` | CSI SecretProviderClass - pulls 3 secrets from Secrets Manager into K8s Secrets |
+| `objectstore.yaml` | Barman `ObjectStore` - S3 backup destination, credentials via Pod Identity |
+| `cnpg-cluster.yaml` | CNPG Cluster - bootstraps from CSI secret, Barman plugin enabled |
 | `scheduled-backup.yaml` | Daily backup at 02:00 UTC via Barman plugin |
 | `certificate.yaml` | TLS cert (Let's Encrypt) issued in `shared-gateway` namespace |
 | `helmrepository.yaml` | community-charts Helm repo |
 | `helmrelease.yaml` | n8n Helm release (v1.16.29), values from ConfigMap |
-| `httproute.yaml` | HTTPRoute — HTTPS listener, routes to n8n port 5678 |
+| `httproute.yaml` | HTTPRoute - HTTPS listener, routes to n8n port 5678 |
 
 ### Required Secrets Manager secrets
 

@@ -20,6 +20,14 @@ Parameters:
     Type: String
     Description: Name of the VPC CloudFormation stack to import values from
 
+  AdminRoleArn:
+    Type: String
+    Description: >
+      IAM principal ARN (role or user) that receives cluster-admin access via an
+      EKS Access Entry. For assumed-role sessions pass the role ARN, not the
+      assumed-role ARN (e.g. arn:aws:iam::123456789012:role/MyRole).
+      Set in Makefile via ADMIN_ROLE_ARN; override with: export ADMIN_ROLE_ARN=<arn>
+
 Resources:
   # -- IAM Role --
   ClusterRole:
@@ -47,9 +55,15 @@ Resources:
       Version: !Ref KubernetesVersion
       RoleArn: !GetAtt ClusterRole.Arn
       # Disable the default vpc-cni (aws-node) and kube-proxy self-managed add-ons.
-      # Cilium replaces both — installing them first creates a conflict.
+      # Cilium replaces both; installing them first creates a conflict.
       # CoreDNS is a managed add-on and is not affected by this setting.
       BootstrapSelfManagedAddons: false
+      # Use the CAM API (Access Entries) instead of the deprecated aws-auth ConfigMap.
+      # Setting BootstrapClusterCreatorAdminPermissions to false removes the implicit
+      # cluster-admin binding on the deploying identity; all access must be explicit.
+      AccessConfig:
+        AuthenticationMode: API
+        BootstrapClusterCreatorAdminPermissions: false
       ResourcesVpcConfig:
         SubnetIds:
           - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
@@ -137,7 +151,7 @@ Resources:
           Value: !Sub ${ProjectName}-${Environment}-ebs-csi-driver
 
   # -- Pod Identity Agent --
-  # Required for EKS Pod Identity — runs as a DaemonSet on each node and provides
+  # Required for EKS Pod Identity. Runs as a DaemonSet on each node and provides
   # short-lived credentials to pods based on PodIdentityAssociation resources.
   PodIdentityAgentAddon:
     Type: AWS::EKS::Addon
@@ -152,7 +166,7 @@ Resources:
 
   # -- Secrets Store CSI Driver Add-on --
   # AWS-managed add-on that installs both the CSI driver and the AWS Secrets Manager provider.
-  # Replaces manual Helm installs — AWS handles versioning and security patches.
+  # Replaces manual Helm installs; AWS handles versioning and security patches.
   # syncSecret enables secretObjects, which creates K8s Secrets from mounted secrets
   # (required for CNPG bootstrap credentials).
   CsiSecretsStoreAddon:
@@ -166,6 +180,22 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-csi-secrets-store
+
+  # -- Admin Access Entry --
+  # Grants cluster-admin to the principal that deploys this stack (e.g. a CI/CD role
+  # or a developer's IAM role). Access Entries replace the aws-auth ConfigMap; they
+  # are validated by the AWS API and auditable via CloudTrail without touching kubectl.
+  # Additional entries can be added via the EKS console, CLI, or CloudFormation.
+  AdminAccessEntry:
+    Type: AWS::EKS::AccessEntry
+    DependsOn: EKSCluster
+    Properties:
+      ClusterName: !Ref EKSCluster
+      PrincipalArn: !Ref AdminRoleArn
+      AccessPolicies:
+        - PolicyArn: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+          AccessScope:
+            Type: cluster
 
 Outputs:
   ClusterName:

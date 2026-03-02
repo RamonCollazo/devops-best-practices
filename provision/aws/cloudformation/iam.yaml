@@ -15,7 +15,7 @@ Resources:
   # -- Secrets Reader Role --
   # Assumed by app ServiceAccounts (e.g. n8n) via EKS Pod Identity.
   # The Pod Identity Agent on each node exchanges the pod's identity for short-lived
-  # AWS credentials — no OIDC provider or SA annotation required.
+  # AWS credentials - no OIDC provider or SA annotation required.
   # PodIdentityAssociations (one per customer namespace) link this role to the n8n SA.
   # Create associations with: make create-pod-identity-association NAMESPACE=<customer>
   SecretsReaderRole:
@@ -41,7 +41,10 @@ Resources:
                   - secretsmanager:GetSecretValue       # Read secret value
                   - secretsmanager:DescribeSecret       # Read metadata (name, ARN, tags)
                   - secretsmanager:ListSecretVersionIds # List versions for rotation support
-                Resource: '*'
+                # Scope to secrets that follow the per-customer n8n naming convention:
+                # <customer>-n8n-db-user, <customer>-n8n-db-password, <customer>-n8n-encryption-key
+                # AWS appends a random 6-char suffix to secret ARNs - the trailing wildcard covers it.
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-n8n-*'
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-secrets-reader-role

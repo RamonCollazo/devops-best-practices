@@ -8,6 +8,11 @@ GITHUB_REPO		?= devops-best-practices
 GATEWAY_API_VERSION		?= v1.2.1
 BARMAN_PLUGIN_VERSION	?= v0.11.0
 
+# IAM principal that receives cluster-admin via an EKS Access Entry.
+# Defaults to the current AWS identity. For assumed-role sessions (SSO, CI/CD)
+# pass the role ARN explicitly: export ADMIN_ROLE_ARN=arn:aws:iam::<account>:role/<name>
+ADMIN_ROLE_ARN		?= $(shell aws sts get-caller-identity --query 'Arn' --output text)
+
 VPC_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-vpc
 EKS_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-eks
 NG_STACK			= $(PROJECT_NAME)-$(ENVIRONMENT)-nodegroup
@@ -19,7 +24,7 @@ CLUSTER_NAME	= $(PROJECT_NAME)-$(ENVIRONMENT)
 CFN_DIR				= provision/aws/cloudformation
 HELM_DIR			= provision/aws/helm
 
-# Fetched live from AWS — required for Cilium kube-proxy replacement
+# Fetched live from AWS - required for Cilium kube-proxy replacement
 K8S_API_HOST	= $(shell aws eks describe-cluster \
 					--name $(CLUSTER_NAME) \
 					--region $(REGION) \
@@ -54,6 +59,7 @@ deploy-eks: deploy-vpc
 			ProjectName=$(PROJECT_NAME) \
 			Environment=$(ENVIRONMENT) \
 			VpcStackName=$(VPC_STACK) \
+			AdminRoleArn=$(ADMIN_ROLE_ARN) \
 		--capabilities CAPABILITY_NAMED_IAM \
 		--region $(REGION) \
 		--no-fail-on-empty-changeset
@@ -224,7 +230,7 @@ install-gateway-api-crds:
 	kubectl wait --for=condition=Established crd/httproutes.gateway.networking.k8s.io --timeout=60s
 
 install-cilium:
-	# No --wait here — Cilium pods stay Pending until nodes join.
+	# No --wait here - Cilium pods stay Pending until nodes join.
 	# Run deploy-nodegroup next, then verify with: kubectl -n kube-system get pods
 	helm upgrade --install cilium cilium/cilium \
 		--namespace kube-system \
@@ -246,7 +252,7 @@ install-barman-plugin:
 	kubectl wait --for=condition=Established crd/objectstores.barmancloud.cnpg.io --timeout=60s
 
 # NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
-# cert-manager is managed by Flux — do NOT install it manually.
+# cert-manager is managed by Flux - do NOT install it manually.
 # CSI driver and AWS provider are managed by Flux (not installed manually).
 install-controllers: helm-repos install-gateway-api-crds install-cilium install-cnpg install-barman-plugin
 

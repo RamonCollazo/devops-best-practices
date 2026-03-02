@@ -9,7 +9,7 @@ spec:
 
   storage:
     size: 5Gi
-    # Explicit storage class — avoids dependency on a default storage class being set.
+    # Explicit storage class - avoids dependency on a default storage class being set.
     storageClass: gp2
 
   bootstrap:
@@ -17,7 +17,7 @@ spec:
       database: n8n
       owner: n8n
       # Secret is created by the CSI driver when the n8n pod first mounts the volume.
-      # CNPG retries until the secret exists — no ordering hack needed.
+      # CNPG retries until the secret exists - no ordering hack needed.
       secret:
         name: acme-db-credentials
 
