@@ -37,7 +37,7 @@ Templates live under `provision/aws/cloudformation/`:
 |----------|----------------|
 | `vpc.yaml` | VPC, public/private subnets across 3 AZs, NAT Gateways, route tables |
 | `eks.yaml` | EKS cluster, cluster IAM role, OIDC provider, EBS CSI driver (IRSA + add-on), Pod Identity agent add-on, Secrets Store CSI add-on |
-| `nodegroup.yaml` | Managed node group (AL2023, m5.xlarge, private subnets), node IAM role, Cilium ENI inline policy |
+| `nodegroup.yaml` | Managed node group (Bottlerocket, m5.xlarge, private subnets), node IAM role, Cilium ENI inline policy, encrypted gp3 root volume |
 | `iam.yaml` | `SecretsReaderRole` - Pod Identity role for n8n pods to read from Secrets Manager |
 | `s3.yaml` | Per-environment backup bucket + `CnpgBackupRole` - Pod Identity role for CNPG pods to write backups |
 
@@ -248,7 +248,7 @@ Each customer gets an isolated namespace with a dedicated n8n instance and CNPG 
 - [x] GitOps (Flux v2)
 - [x] App stack (acme: CNPG + n8n + HTTPRoute + TLS)
 - [x] CNPG backups (Barman Cloud plugin → S3, restore tested)
-- [ ] EKS hardening
+- [x] EKS hardening
 - [ ] Monitoring (kube-prometheus-stack + Loki)
 - [ ] Customer onboarding automation (sync-customers.sh)
 - [ ] GCP (Terraform + GKE)
