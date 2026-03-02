@@ -27,7 +27,7 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 					--output text | sed 's|https://||')
 
 .PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam deploy-s3 kubeconfig \
-				delete-nodegroup delete-eks delete-vpc delete-iam delete-s3 delete-apps \
+				delete-nodegroup delete-eks delete-vpc delete-iam delete-s3 delete-apps delete-infra \
 				helm-repos install-gateway-api-crds install-cilium \
 				install-cnpg install-barman-plugin install-controllers \
 				flux-bootstrap create-cluster-vars \
@@ -186,13 +186,26 @@ create-cnpg-backup-association:
 		--role-arn $(CNPG_BACKUP_ROLE_ARN) \
 		--region $(REGION)
 
-# -- Delete apps (run before delete-nodegroup to let CSI driver clean up EBS volumes) --
-# Suspends Flux first so it doesn't re-create resources while we delete them.
+# -- Delete apps (run first) --
+# Suspends the apps kustomization so Flux doesn't re-create resources while we delete them.
+# Deletes CNPG clusters so the EBS CSI driver can release and delete the EBS volumes.
 
 delete-apps:
 	flux suspend kustomization apps
 	kubectl delete clusters.postgresql.cnpg.io --all --all-namespaces --ignore-not-found
 	kubectl wait --for=delete pvc --all --all-namespaces --timeout=180s || true
+
+# -- Delete infrastructure (run after delete-apps, before delete-eks) --
+# Suspends remaining Flux kustomizations and deletes the shared-gateway namespace.
+# Deleting shared-gateway triggers the cloud controller manager to remove the Gateway ELB
+# from AWS while the cluster is still alive. Without this, the ELB outlives the cluster
+# and leaves dangling dependencies that block VPC deletion.
+
+delete-infra:
+	flux suspend kustomization infrastructure-configs
+	flux suspend kustomization infrastructure-controllers
+	kubectl delete namespace shared-gateway --ignore-not-found
+	kubectl wait --for=delete namespace/shared-gateway --timeout=120s
 
 # -- Helm repos --
 

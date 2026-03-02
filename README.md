@@ -124,9 +124,10 @@ make deploy-vpc ENVIRONMENT=production REGION=us-west-2
 ### Teardown (reverse order)
 
 ```bash
-make delete-apps        # removes CNPG clusters so EBS volumes are released
+make delete-apps        # suspend apps kustomization, delete CNPG clusters + PVCs
+make delete-infra       # suspend remaining kustomizations, delete shared-gateway (removes ELB)
 make delete-iam
-make delete-s3
+make delete-s3          # empty the bucket manually first if backups exist: aws s3 rm s3://<bucket> --recursive
 make delete-nodegroup
 make delete-eks
 make delete-vpc
