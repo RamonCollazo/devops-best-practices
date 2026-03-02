@@ -88,7 +88,12 @@ make flux-bootstrap
 #     Run after deploy-s3 so cnpgBackupBucket is available
 make create-cluster-vars
 
-# 13. Per-customer setup (repeat for each customer)
+# 13. Point DNS: grafana-staging.aws.raymondcollazo.com → Gateway LoadBalancer hostname
+#     Retrieve Grafana admin password after monitoring reconciles:
+#       kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+#         -o jsonpath='{.data.admin-password}' | base64 -d
+
+# 14. Per-customer setup (repeat for each customer)
 # a) Create secrets in AWS Secrets Manager:
 #      <customer>-n8n-db-user
 #      <customer>-n8n-db-password

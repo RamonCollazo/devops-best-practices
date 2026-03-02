@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grafana-tls
+  # Must be in the same namespace as the Gateway so the secret is accessible.
+  namespace: shared-gateway
+spec:
+  secretName: grafana-tls
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+  dnsNames:
+    - grafana-staging.aws.raymondcollazo.com

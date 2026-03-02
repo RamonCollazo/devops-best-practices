@@ -1,0 +1,42 @@
+grafana:
+  # Admin password is auto-generated and stored in the kube-prometheus-stack-grafana Secret.
+  # Retrieve after deploy with:
+  #   kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  #     -o jsonpath='{.data.admin-password}' | base64 -d
+
+  # Pre-configure Loki as a datasource so it is available on first login.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+
+  # Grafana state (dashboards, alerts) is managed via ConfigMaps and GitOps.
+  # No persistent volume needed for Grafana itself.
+  persistence:
+    enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2-encrypted
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 50Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2-encrypted
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 2Gi
