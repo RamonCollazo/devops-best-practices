@@ -221,6 +221,34 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-csi-secrets-store
 
+  # -- GuardDuty Detector --
+  # Enables Amazon GuardDuty for this account/region with EKS-specific threat detection.
+  # EKS_AUDIT_LOGS analyzes Kubernetes audit logs for suspicious API activity
+  # (privilege escalation, credential exposure, anomalous API calls).
+  # EKS_RUNTIME_MONITORING runs an eBPF-based agent on each node to detect malicious
+  # process behaviour, unexpected network connections, and file system tampering at runtime.
+  # EKS_ADDON_MANAGEMENT lets GuardDuty automatically install and update the monitoring
+  # agent as an EKS add-on (aws-guardduty-agent DaemonSet in amazon-guardduty namespace),
+  # removing the need to manage agent lifecycle manually.
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      # Publish new findings to EventBridge every 6 hours (default); reduce to ONE_HOUR
+      # or FIFTEEN_MINUTES for faster alerting in production.
+      FindingPublishingFrequency: SIX_HOURS
+      Features:
+        # Analyses Kubernetes audit logs forwarded from EKS to detect control-plane threats.
+        - Name: EKS_AUDIT_LOGS
+          Status: ENABLED
+        # Deploys an eBPF sensor on each node via an EKS add-on for runtime threat detection.
+        - Name: EKS_RUNTIME_MONITORING
+          Status: ENABLED
+          AdditionalConfiguration:
+            # GuardDuty automatically installs and upgrades the monitoring agent add-on.
+            - Name: EKS_ADDON_MANAGEMENT
+              Status: ENABLED
+
   # -- Admin Access Entry --
   # Grants cluster-admin to the principal that deploys this stack (e.g. a CI/CD role
   # or a developer's IAM role). Access Entries replace the aws-auth ConfigMap; they
