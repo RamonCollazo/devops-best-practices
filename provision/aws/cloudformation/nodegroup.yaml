@@ -79,6 +79,10 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        # Enables SSM Session Manager access to nodes without SSH keys.
+        # Bottlerocket exposes its admin container via SSM - no SSH daemon or
+        # key pairs are needed. All sessions are logged via CloudTrail.
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       # Cilium ENI mode requires EC2 permissions to manage network interfaces
       # and allocate IPs directly from VPC subnets. These replace the permissions
       # that would normally come from AmazonEKS_CNI_Policy.
@@ -123,7 +127,12 @@ Resources:
         - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet3Id'
       InstanceTypes:
         - !Ref NodeInstanceType
-      AmiType: AL2023_x86_64_STANDARD
+      # Bottlerocket is a purpose-built container OS from AWS. It has a smaller
+      # attack surface than general-purpose Linux distributions, enforces SELinux
+      # by default, verifies the disk image on boot via dm-verity, and mounts the
+      # OS partition read-only. It does not include a package manager or shell -
+      # host access is via the SSM-backed admin container only.
+      AmiType: BOTTLEROCKET_x86_64
       DiskSize: !Ref NodeDiskSize
       LaunchTemplate:
         Id: !Ref NodeLaunchTemplate
