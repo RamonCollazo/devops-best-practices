@@ -1,4 +1,4 @@
-PROJECT_NAME		?= devops-best-practice
+PROJECT_NAME		?= devops-best-practices
 ENVIRONMENT		?= staging
 REGION			?= us-east-1
 
