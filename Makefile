@@ -28,7 +28,7 @@ K8S_API_HOST	= $(shell aws eks describe-cluster \
 
 .PHONY:	deploy-vpc deploy-eks deploy-nodegroup deploy-all deploy-iam deploy-s3 kubeconfig \
 				delete-nodegroup delete-eks delete-vpc delete-iam delete-s3 delete-apps \
-				helm-repos install-gateway-api-crds install-cilium install-cert-manager \
+				helm-repos install-gateway-api-crds install-cilium \
 				install-cnpg install-barman-plugin install-controllers \
 				flux-bootstrap create-cluster-vars \
 				create-pod-identity-association create-cnpg-backup-association
@@ -187,8 +187,10 @@ create-cnpg-backup-association:
 		--region $(REGION)
 
 # -- Delete apps (run before delete-nodegroup to let CSI driver clean up EBS volumes) --
+# Suspends Flux first so it doesn't re-create resources while we delete them.
 
 delete-apps:
+	flux suspend kustomization apps
 	kubectl delete clusters.postgresql.cnpg.io --all --all-namespaces --ignore-not-found
 	kubectl wait --for=delete pvc --all --all-namespaces --timeout=180s || true
 
@@ -219,13 +221,6 @@ install-cilium:
 		--set k8sServiceHost=$(K8S_API_HOST) \
 		--set k8sServicePort=443
 
-install-cert-manager:
-	helm upgrade --install cert-manager jetstack/cert-manager \
-		--namespace cert-manager \
-		--create-namespace \
-		--values $(HELM_DIR)/cert-manager-values.yaml \
-		--wait
-
 install-cnpg:
 	helm upgrade --install cnpg cnpg/cloudnative-pg \
 		--namespace cnpg-system \
@@ -240,8 +235,9 @@ install-barman-plugin:
 	kubectl wait --for=condition=Established crd/objectstores.barmancloud.cnpg.io --timeout=60s
 
 # NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
+# cert-manager is managed by Flux — do NOT install it manually.
 # CSI driver and AWS provider are managed by Flux (not installed manually).
-install-controllers: helm-repos install-cilium install-cert-manager install-cnpg install-barman-plugin
+install-controllers: helm-repos install-gateway-api-crds install-cilium install-cnpg install-barman-plugin
 
 # -- GitOps --
 # Creates a ConfigMap in flux-system with cluster-specific values.
