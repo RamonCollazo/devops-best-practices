@@ -6,3 +6,10 @@ metadata:
     # Required so HTTPRoutes in this namespace (e.g. cert-manager HTTP01 solver)
     # can attach to the shared Gateway, which uses a namespace Selector.
     shared-gateway: "true"
+    # cert-manager creates temporary solver pods here during ACME HTTP01 challenges.
+    # baseline blocks the most dangerous permissions (privileged, hostPID, hostNetwork)
+    # without requiring non-root or capability drops that solver pods may not declare.
+    # restricted is used for warn/audit only to surface any future policy violations.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
