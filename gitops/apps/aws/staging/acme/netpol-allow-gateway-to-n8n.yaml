@@ -1,21 +1,32 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
 metadata:
   name: allow-gateway-to-n8n
   namespace: acme
 spec:
-  podSelector:
+  # Cilium Envoy (the Gateway API proxy) runs with hostNetwork: true in kube-system.
+  # Host-network pods share the node's network namespace, so Cilium classifies their
+  # traffic as the "cluster" entity rather than a namespace-scoped endpoint identity.
+  # Standard Kubernetes NetworkPolicy namespaceSelector / ipBlock selectors cannot
+  # match this traffic; only CiliumNetworkPolicy fromEntities supports it.
+  #
+  # fromEntities: [cluster] allows any endpoint known to Cilium within the cluster
+  # (pods, nodes, host-network processes) to reach n8n on port 5678, while blocking
+  # all traffic originating outside the cluster boundary. Combined with the standard
+  # default-deny NetworkPolicy in this namespace, the effective policy is:
+  #   - Allow: intra-cluster traffic on TCP 5678
+  #   - Deny: everything else (all other ports, all external sources)
+  #
+  # The security boundary for external access is the ELB + Cilium Gateway (HTTPRoute):
+  # external clients must go through the Gateway which enforces hostname, TLS, and
+  # routing rules before proxying to n8n.
+  endpointSelector:
     matchLabels:
       app.kubernetes.io/name: n8n
-  policyTypes:
-    - Ingress
   ingress:
-    # Cilium Envoy uses hostNetwork: true, so traffic arrives at n8n with the node
-    # IP as source. Neither namespaceSelector nor ipBlock selectors reliably match
-    # host-network traffic in Cilium ENI mode (pod IPs are VPC-native; Cilium
-    # enforces policy at the eBPF layer before NAT). The port restriction is kept
-    # as the primary control; external access to port 5678 is not possible without
-    # going through the ELB -> Gateway chain (no NodePort, no hostPort).
-    - ports:
-        - protocol: TCP
-          port: 5678
+    - fromEntities:
+        - cluster
+      toPorts:
+        - ports:
+            - port: "5678"
+              protocol: TCP
