@@ -10,18 +10,12 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # Cilium Gateway API uses an Envoy proxy DaemonSet in kube-system to handle
-    # HTTPRoute forwarding. Traffic from the load balancer arrives at the Envoy
-    # pod and is proxied to n8n, so the source namespace seen by NetworkPolicy
-    # enforcement is kube-system, not shared-gateway.
-    # shared-gateway is included to cover direct-forwarding proxy modes.
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: shared-gateway
-      ports:
+    # Cilium Envoy uses hostNetwork: true, so traffic arrives at n8n with the node
+    # IP as source. Neither namespaceSelector nor ipBlock selectors reliably match
+    # host-network traffic in Cilium ENI mode (pod IPs are VPC-native; Cilium
+    # enforces policy at the eBPF layer before NAT). The port restriction is kept
+    # as the primary control; external access to port 5678 is not possible without
+    # going through the ELB -> Gateway chain (no NodePort, no hostPort).
+    - ports:
         - protocol: TCP
           port: 5678
