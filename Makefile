@@ -224,8 +224,6 @@ install-gateway-api-crds:
 	kubectl wait --for=condition=Established crd/httproutes.gateway.networking.k8s.io --timeout=60s
 
 install-cilium:
-	kubectl delete daemonset aws-node -n kube-system --ignore-not-found
-	kubectl delete daemonset kube-proxy -n kube-system --ignore-not-found
 	# No --wait here — Cilium pods stay Pending until nodes join.
 	# Run deploy-nodegroup next, then verify with: kubectl -n kube-system get pods
 	helm upgrade --install cilium cilium/cilium \

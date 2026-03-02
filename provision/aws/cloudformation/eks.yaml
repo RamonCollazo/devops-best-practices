@@ -46,6 +46,10 @@ Resources:
       Name: !Sub ${ProjectName}-${Environment}
       Version: !Ref KubernetesVersion
       RoleArn: !GetAtt ClusterRole.Arn
+      # Disable the default vpc-cni (aws-node) and kube-proxy self-managed add-ons.
+      # Cilium replaces both — installing them first creates a conflict.
+      # CoreDNS is a managed add-on and is not affected by this setting.
+      BootstrapSelfManagedAddons: false
       ResourcesVpcConfig:
         SubnetIds:
           - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
