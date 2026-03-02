@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-https
+  namespace: acme
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: n8n
+  policyTypes:
+    - Egress
+  egress:
+    # Allow HTTPS egress for application workloads that call external APIs.
+    # This is required for workflow automation tools and also covers the
+    # Pod Identity credential endpoint (169.254.170.23) which uses link-local
+    # addressing and is not subject to NetworkPolicy enforcement.
+    - ports:
+        - protocol: TCP
+          port: 443

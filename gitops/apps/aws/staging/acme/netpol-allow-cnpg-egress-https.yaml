@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-egress-https
+  namespace: acme
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: acme-db
+  policyTypes:
+    - Egress
+  egress:
+    # CNPG Barman plugin calls the S3 API over HTTPS to write WAL segments
+    # and base backups. Pod Identity credentials are exchanged via link-local
+    # (169.254.170.23) which is outside NetworkPolicy scope.
+    - ports:
+        - protocol: TCP
+          port: 443

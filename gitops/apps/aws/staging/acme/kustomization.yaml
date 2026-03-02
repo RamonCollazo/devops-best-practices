@@ -11,6 +11,12 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - httproute.yaml
+  - netpol-default-deny.yaml
+  - netpol-allow-dns.yaml
+  - netpol-allow-gateway-to-n8n.yaml
+  - netpol-allow-n8n-to-db.yaml
+  - netpol-allow-app-egress-https.yaml
+  - netpol-allow-cnpg-egress-https.yaml
 configMapGenerator:
   - name: n8n-values
     namespace: acme

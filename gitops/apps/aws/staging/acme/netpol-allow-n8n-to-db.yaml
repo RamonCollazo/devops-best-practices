@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-n8n-to-db
+  namespace: acme
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: n8n
+  policyTypes:
+    - Egress
+  egress:
+    # n8n connects to the CNPG read-write service (PostgreSQL on port 5432).
+    # cnpg.io/cluster selects all pods belonging to the acme-db cluster.
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: acme-db
+      ports:
+        - protocol: TCP
+          port: 5432

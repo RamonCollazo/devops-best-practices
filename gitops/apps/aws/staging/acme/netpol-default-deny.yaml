@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: acme
+spec:
+  # Empty podSelector matches every pod in the namespace.
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # No ingress or egress rules - all traffic is denied by default.
+  # Subsequent policies add back only the flows that are explicitly required.
