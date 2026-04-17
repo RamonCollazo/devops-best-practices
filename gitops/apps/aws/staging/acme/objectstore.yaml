@@ -13,3 +13,4 @@ spec:
       # Requires a PodIdentityAssociation linking the acme-db SA to CnpgBackupRole.
       # Create with: make create-cnpg-backup-association NAMESPACE=acme
       inheritFromIAMRole: true
+  retentionPolicy: "30d"
