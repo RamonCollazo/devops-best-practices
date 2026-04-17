@@ -265,7 +265,7 @@ Deployed in the `monitoring` namespace. Managed by Flux via `monitoring-controll
 | Chart | Version | What it provides |
 |-------|---------|-----------------|
 | `grafana/kube-prometheus-stack` | v72.3.0 | Prometheus, Grafana, Alertmanager, node-exporter, kube-state-metrics |
-| `grafana/loki` | v6.53.0 | Log aggregation backend (SingleBinary mode, filesystem storage on gp2-encrypted PVC) |
+| `grafana/loki` | v6.53.0 | Log aggregation backend (SingleBinary mode, filesystem storage on gp3-encrypted PVC) |
 | `grafana/promtail` | v6.17.1 | DaemonSet log collector — tails pod logs from each node, ships to Loki |
 
 ### Configs (`monitoring-configs`)
@@ -279,9 +279,9 @@ Deployed in the `monitoring` namespace. Managed by Flux via `monitoring-controll
 
 - **Grafana** is exposed at `https://grafana-staging.aws.raymondcollazo.com`
 - **Loki datasource** is pre-configured in Grafana via `additionalDataSources` in kube-prometheus-stack values
-- **Prometheus** retains metrics for 15 days on a 50 Gi gp2-encrypted PVC
-- **Alertmanager** uses a 2 Gi gp2-encrypted PVC
-- **Loki** uses a 20 Gi gp2-encrypted PVC in SingleBinary mode (single replica, no replication)
+- **Prometheus** retains metrics for 15 days on a 50 Gi gp3-encrypted PVC
+- **Alertmanager** uses a 2 Gi gp3-encrypted PVC
+- **Loki** uses a 20 Gi gp3-encrypted PVC in SingleBinary mode (single replica, no replication)
 - **Promtail** ships to `http://monitoring-loki.monitoring.svc.cluster.local:3100` (service name is Helm release prefixed with namespace)
 - Admin password: `kubectl get secret -n monitoring monitoring-kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`
 

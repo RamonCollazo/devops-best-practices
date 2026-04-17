@@ -9,9 +9,9 @@ spec:
 
   storage:
     size: 5Gi
-    # gp2-encrypted is the cluster default StorageClass (encrypted EBS, ebs.csi.aws.com).
+    # gp3-encrypted is the cluster default StorageClass (encrypted gp3 EBS, ebs.csi.aws.com).
     # Defined in gitops/infrastructure/configs/base/storageclass/
-    storageClass: gp2-encrypted
+    storageClass: gp3-encrypted
 
   bootstrap:
     initdb:

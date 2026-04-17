@@ -22,7 +22,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: gp2-encrypted
+          storageClassName: gp3-encrypted
           accessModes:
             - ReadWriteOnce
           resources:
@@ -34,7 +34,7 @@ alertmanager:
     storage:
       volumeClaimTemplate:
         spec:
-          storageClassName: gp2-encrypted
+          storageClassName: gp3-encrypted
           accessModes:
             - ReadWriteOnce
           resources:

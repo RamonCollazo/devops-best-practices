@@ -20,7 +20,7 @@ singleBinary:
   replicas: 1
   persistence:
     enabled: true
-    storageClass: gp2-encrypted
+    storageClass: gp3-encrypted
     size: 20Gi
 
 # Disable distributed-mode components - not needed in SingleBinary mode.

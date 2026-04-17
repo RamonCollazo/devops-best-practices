@@ -59,12 +59,14 @@ protected.
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: gp2-encrypted
+  name: gp3-encrypted
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: ebs.csi.aws.com
 parameters:
-  type: gp2
+  type: gp3
+  iops: "3000"
+  throughput: "125"
   encrypted: "true"
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
