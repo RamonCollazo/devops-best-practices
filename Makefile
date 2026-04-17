@@ -211,6 +211,8 @@ delete-apps:
 # and leaves dangling dependencies that block VPC deletion.
 
 delete-infra:
+	flux suspend kustomization monitoring-configs
+	flux suspend kustomization monitoring-controllers
 	flux suspend kustomization infrastructure-configs
 	flux suspend kustomization infrastructure-controllers
 	kubectl delete namespace shared-gateway --ignore-not-found
