@@ -1,6 +1,5 @@
 # AWS Architecture Overview
 
----
 
 ## Infrastructure Layers
 
@@ -16,9 +15,11 @@
 |  Applications (per customer namespace)                   |
 |  n8n  |  CNPG cluster  |  CiliumNetworkPolicies         |
 +----------------------------------------------------------+
+|  Monitoring (monitoring namespace)                       |
+|  Prometheus  |  Grafana  |  Loki  |  Promtail           |
++----------------------------------------------------------+
 ```
 
----
 
 ## Network Topology
 
@@ -44,7 +45,6 @@ Cilium runs in **ENI mode**: pods receive real VPC IP addresses allocated direct
 node's Elastic Network Interfaces. There is no overlay network. Pod-to-pod traffic is native
 VPC routing. `aws-node` and `kube-proxy` DaemonSets are not deployed.
 
----
 
 ## CloudFormation Stacks
 
@@ -58,7 +58,6 @@ VPC routing. `aws-node` and `kube-proxy` DaemonSets are not deployed.
 
 Deploy order: `vpc` -> `eks` + `s3` (parallel) -> `nodegroup` -> `iam`
 
----
 
 ## Kubernetes Architecture
 
@@ -90,7 +89,6 @@ Cilium replaces both `aws-node` (VPC CNI) and `kube-proxy`. It provides:
 | Pod Identity agent | Short-lived AWS credentials injected into pods |
 | GuardDuty agent | Runtime threat detection (EKS audit logs + runtime monitoring) |
 
----
 
 ## GitOps Architecture
 
@@ -108,10 +106,18 @@ infrastructure-configs
   Gateway (shared-gateway namespace)
   ClusterIssuer (Let's Encrypt)
         |
-        v
-apps
-  Per-customer namespace
-  (CNPG cluster, n8n HelmRelease, HTTPRoute, CiliumNetworkPolicies)
+        +-----> apps
+        |         Per-customer namespace
+        |         (CNPG cluster, n8n HelmRelease, HTTPRoute, CiliumNetworkPolicies)
+        |
+        +-----> monitoring-controllers
+                  HelmRelease: kube-prometheus-stack
+                  HelmRelease: Loki
+                  HelmRelease: Promtail
+                        |
+                        v
+                  monitoring-configs
+                    Certificate + HTTPRoute for Grafana
 ```
 
 ### Repository layout
@@ -132,7 +138,6 @@ gitops/
       acme/             # Reference customer implementation
 ```
 
----
 
 ## Application Architecture (per customer)
 
@@ -172,7 +177,6 @@ namespace: acme
 +------------------------------------------------------------------+
 ```
 
----
 
 ## Traffic Flows
 
@@ -213,7 +217,6 @@ Any pod
 CoreDNS (kube-system)
 ```
 
----
 
 ## Network Policy Model
 
@@ -235,7 +238,6 @@ The `allow-gateway-to-n8n` policy uses `fromEntities: [cluster]` because Cilium 
 with `hostNetwork: true`. Host-network processes are classified by Cilium as the `cluster`
 entity, which cannot be matched by standard namespace or IP selectors.
 
----
 
 ## Secrets Architecture
 

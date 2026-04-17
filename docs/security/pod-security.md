@@ -2,7 +2,8 @@
 
 Reference: [AWS EKS Best Practices: Pod Security](https://docs.aws.amazon.com/eks/latest/best-practices/pod-security.html)
 
----
+See [best-practices-traceability.md](best-practices-traceability.md) for a table mapping every best practice to the exact file and config.
+
 
 ## Implemented Practices
 
@@ -43,7 +44,6 @@ network namespace.
 This label is part of the customer namespace template. Every new customer namespace added
 to the platform should carry these labels.
 
----
 
 ### 2. Pod Security Admission on the Shared Gateway Namespace
 
@@ -68,7 +68,6 @@ required by `restricted` (e.g. seccompProfile). Using `baseline` in enforce mode
 right compromise: it blocks privilege abuse without breaking certificate issuance.
 `restricted` in warn/audit provides visibility for future policy tightening.
 
----
 
 ### 3. Container Security Context - Platform Template
 
@@ -131,7 +130,6 @@ This block is the reference template for any new customer application onboarded 
 platform. The `runAsUser` value and the writable mount paths will differ per application
 image, but the security fields remain constant.
 
----
 
 ### 4. Resource Requests and Limits - Platform Template
 
@@ -163,14 +161,12 @@ preventing the pod from starting in a state where it will immediately be OOM-kil
 The values shown are conservative starting points; each customer application should tune
 them based on observed usage from monitoring.
 
----
 
 ## Not Applicable
 
 - **Docker-in-Docker (Practice 10):** No CI/CD workloads run in this cluster.
 - **hostPath restriction:** Already blocked by the PSA `restricted` and `baseline` labels.
 
----
 
 ## Future Work
 

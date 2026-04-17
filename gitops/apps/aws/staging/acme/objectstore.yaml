@@ -5,12 +5,13 @@ metadata:
   namespace: acme
 spec:
   configuration:
-    # Bucket name injected by Flux postBuild substitution from cluster-vars ConfigMap.
-    # Set via: make create-cluster-vars (after make deploy-s3).
+    # ${cnpgBackupBucket} is substituted by Flux from the cluster-vars ConfigMap at reconcile time.
+    # Set via: make create-cluster-vars (after make deploy-s3)
     destinationPath: s3://${cnpgBackupBucket}/acme
+    # Pod Identity injects short-lived STS credentials into the CNPG pod at runtime.
+    # The CnpgBackupRole is bound via: make create-cnpg-backup-association
     s3Credentials:
-      # Delegates credential resolution to the Pod Identity Agent - no static keys.
-      # Requires a PodIdentityAssociation linking the acme-db SA to CnpgBackupRole.
-      # Create with: make create-cnpg-backup-association NAMESPACE=acme
       inheritFromIAMRole: true
+  # Barman deletes base backups and WAL older than 30 days after each successful backup run.
+  # Matches NoncurrentVersionExpiration in s3.yaml so older versions are cleaned up together.
   retentionPolicy: "30d"

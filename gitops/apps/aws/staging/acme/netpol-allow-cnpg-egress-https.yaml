@@ -8,10 +8,8 @@ spec:
     matchLabels:
       cnpg.io/cluster: acme-db
   egress:
-    # CNPG Barman plugin calls the S3 API over HTTPS to write WAL segments
-    # and base backups. toEntities: [world] covers all destinations outside
-    # the cluster boundary. Pod Identity credentials are exchanged via
-    # link-local (169.254.170.23) which is outside NetworkPolicy scope.
+    # CNPG (Barman plugin) writes WAL and base backups to S3 over HTTPS.
+    # Future: replace toEntities: world with toFQDNs rules targeting the S3 endpoint.
     - toEntities:
         - world
       toPorts:

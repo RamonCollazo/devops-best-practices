@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: EKS managed node group
+Description: EKS managed node group with Bottlerocket, IMDSv2, encrypted volumes, and Cilium ENI permissions
 
 Parameters:
   ProjectName:
@@ -45,17 +45,6 @@ Parameters:
     Description: Root disk size in GiB for each worker node
 
 Resources:
-  # -- Launch Template --
-  # Enforces IMDSv2 and configures the Bottlerocket data volume on every node.
-  # HttpTokens: required  - disables IMDSv1 (PUT-based token flow only).
-  # HttpPutResponseHopLimit: 2 - needed so containers can reach the IMDS endpoint
-  #   through the node's network namespace (IMDSv1 default was 1, which blocks containers).
-  # HttpEndpoint: enabled - IMDS must remain on; the Pod Identity Agent relies on it to
-  #   exchange pod identities for short-lived AWS credentials.
-  # BlockDeviceMappings: when a launch template is attached to a managed node group,
-  #   EKS requires disk size to be specified here rather than on the NodeGroup directly.
-  #   /dev/xvdb is the Bottlerocket data partition (container images, runtime data).
-  #   Encrypted: true ensures data at rest on every node volume is protected.
   NodeLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -63,18 +52,16 @@ Resources:
       LaunchTemplateData:
         MetadataOptions:
           HttpEndpoint: enabled
-          HttpTokens: required
-          HttpPutResponseHopLimit: 2
+          HttpTokens: required              # IMDSv2 enforced; blocks SSRF attacks that can reach IMDS via HTTP
+          HttpPutResponseHopLimit: 2        # hop limit of 2 allows containers to reach IMDS through the host network namespace
         BlockDeviceMappings:
-          - DeviceName: /dev/xvdb
+          - DeviceName: /dev/xvdb           # Bottlerocket data partition (container images and runtime data)
             Ebs:
               VolumeSize: !Ref NodeDiskSize
               VolumeType: gp3
               DeleteOnTermination: true
               Encrypted: true
 
-  # -- IAM Role --
-  # EC2 nodes assume this role.
   NodeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -89,14 +76,10 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-        # Enables SSM Session Manager access to nodes without SSH keys.
-        # Bottlerocket exposes its admin container via SSM - no SSH daemon or
-        # key pairs are needed. All sessions are logged via CloudTrail.
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-      # Cilium ENI mode requires EC2 permissions to manage network interfaces
-      # and allocate IPs directly from VPC subnets. These replace the permissions
-      # that would normally come from AmazonEKS_CNI_Policy.
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore  # SSM Session Manager access; no SSH or open ports needed
       Policies:
+        # Cilium ENI mode requires EC2 API access to create and manage ENIs and assign pod IPs.
+        # AmazonEKS_CNI_Policy (used by aws-node) does not cover all of these actions.
         - PolicyName: CiliumENI
           PolicyDocument:
             Version: '2012-10-17'
@@ -123,7 +106,6 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-eks-node-role
 
-  # -- Managed Node Group --
   NodeGroup:
     Type: AWS::EKS::Nodegroup
     Properties:
@@ -137,12 +119,7 @@ Resources:
         - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet3Id'
       InstanceTypes:
         - !Ref NodeInstanceType
-      # Bottlerocket is a purpose-built container OS from AWS. It has a smaller
-      # attack surface than general-purpose Linux distributions, enforces SELinux
-      # by default, verifies the disk image on boot via dm-verity, and mounts the
-      # OS partition read-only. It does not include a package manager or shell -
-      # host access is via the SSM-backed admin container only.
-      AmiType: BOTTLEROCKET_x86_64
+      AmiType: BOTTLEROCKET_x86_64  # immutable OS, SELinux enforcing, verified boot, no shell or package manager
       LaunchTemplate:
         Id: !Ref NodeLaunchTemplate
         Version: !GetAtt NodeLaunchTemplate.LatestVersionNumber
@@ -151,7 +128,7 @@ Resources:
         MinSize: !Ref NodeMinSize
         MaxSize: !Ref NodeMaxSize
       UpdateConfig:
-        MaxUnavailable: 1 # Rolling update, only 1 node down at a time.
+        MaxUnavailable: 1  # rolling update: one node replaced at a time
       Tags:
         Name: !Sub ${ProjectName}-${Environment}-node
 
@@ -165,4 +142,3 @@ Outputs:
     Value: !GetAtt NodeRole.Arn
     Export:
       Name: !Sub ${AWS::StackName}-NodeRoleArn
-

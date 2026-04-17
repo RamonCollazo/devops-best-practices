@@ -3,6 +3,28 @@
 Production-grade multi-tenant Kubernetes platform across AWS, GCP, and Azure.
 Reference implementation for a consistent GitOps-driven stack: CNI, TLS, database, backups, and secrets.
 
+## Documentation
+
+This project follows the [AWS EKS Best Practices Guide](https://docs.aws.amazon.com/eks/latest/best-practices/introduction.html).
+See [docs/security/best-practices-traceability.md](docs/security/best-practices-traceability.md) for a full mapping of every implemented best practice to the exact file and configuration.
+
+| Topic | Doc |
+|-------|-----|
+| AWS architecture overview | [docs/architecture/aws-overview.md](docs/architecture/aws-overview.md) |
+| Full deploy guide (step-by-step with rationale) | [docs/operations/deploy.md](docs/operations/deploy.md) |
+| Cilium — ENI mode, Gateway API, kube-proxy replacement | [docs/networking/cilium.md](docs/networking/cilium.md) |
+| Network security — CiliumNetworkPolicy model | [docs/security/network.md](docs/security/network.md) |
+| IAM — Pod Identity, Access Entries, least privilege | [docs/security/iam.md](docs/security/iam.md) |
+| Data encryption — KMS, EBS, S3, Secrets Manager | [docs/security/data-encryption.md](docs/security/data-encryption.md) |
+| Pod security — PSA, securityContext, resource limits | [docs/security/pod-security.md](docs/security/pod-security.md) |
+| Infrastructure security — Bottlerocket, SSM, immutable infra | [docs/security/infrastructure.md](docs/security/infrastructure.md) |
+| Runtime security — GuardDuty, seccomp, capabilities | [docs/security/runtime-security.md](docs/security/runtime-security.md) |
+| Database — CNPG, backups, retention, restore | [docs/database/cnpg.md](docs/database/cnpg.md) |
+| Monitoring — Prometheus, Grafana, Loki, Promtail | [docs/monitoring/observability.md](docs/monitoring/observability.md) |
+| AWS EKS Best Practices — full implementation traceability | [docs/security/best-practices-traceability.md](docs/security/best-practices-traceability.md) |
+
+---
+
 ## Status
 
 | Cloud | Provisioning | Status |

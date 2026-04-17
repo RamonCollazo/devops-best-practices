@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: EKS cluster with OIDC provider
+Description: EKS cluster with OIDC provider, KMS secret encryption, GuardDuty, and managed add-ons
 
 Parameters:
   ProjectName:
@@ -29,12 +29,8 @@ Parameters:
       Set in Makefile via ADMIN_ROLE_ARN; override with: export ADMIN_ROLE_ARN=<arn>
 
 Resources:
-  # -- KMS Key for etcd Secret Encryption --
-  # Encrypts all Kubernetes Secret objects at rest in etcd using envelope encryption.
-  # EKS wraps each secret with a data encryption key (DEK) that is itself encrypted by
-  # this CMK. Annual automatic rotation re-encrypts future DEKs; existing secrets are
-  # re-encrypted on next write. EKS creates a KMS grant on this key automatically when
-  # EncryptionConfig is applied.
+  # KMS key for etcd envelope encryption. Encrypts all Kubernetes Secrets at rest.
+  # EnableKeyRotation rotates the key material annually without changing the key ARN.
   EtcdEncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -43,8 +39,6 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          # Root account statement is required by AWS KMS. It delegates key administration
-          # to IAM policies rather than embedding permissions in the key policy directly.
           - Sid: EnableRootAccess
             Effect: Allow
             Principal:
@@ -61,7 +55,6 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-${Environment}-eks-etcd'
       TargetKeyId: !Ref EtcdEncryptionKey
 
-  # -- IAM Role --
   ClusterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -71,7 +64,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: eks.amazonaws.com  # trust policy says only this service can assume the role
+              Service: eks.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
@@ -79,31 +72,23 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-eks-cluster-role
 
-  # -- EKS Cluster --
   EKSCluster:
     Type: AWS::EKS::Cluster
     Properties:
       Name: !Sub ${ProjectName}-${Environment}
       Version: !Ref KubernetesVersion
       RoleArn: !GetAtt ClusterRole.Arn
-      # Disable the default vpc-cni (aws-node) and kube-proxy self-managed add-ons.
-      # Cilium replaces both; installing them first creates a conflict.
-      # CoreDNS is a managed add-on and is not affected by this setting.
+      # Prevents EKS from installing aws-node (VPC CNI) and kube-proxy as self-managed add-ons.
+      # Cilium replaces both; if they were present, there would be a CNI conflict.
       BootstrapSelfManagedAddons: false
-      # Use the CAM API (Access Entries) instead of the deprecated aws-auth ConfigMap.
-      # Setting BootstrapClusterCreatorAdminPermissions to false removes the implicit
-      # cluster-admin binding on the deploying identity; all access must be explicit.
       AccessConfig:
-        AuthenticationMode: API
-        BootstrapClusterCreatorAdminPermissions: false
-      # Envelope encryption for Kubernetes Secrets stored in etcd.
-      # EKS uses the KMS key to encrypt a per-secret data encryption key (DEK).
-      # Only the Secrets resource type is encrypted; ConfigMaps and other objects are not.
+        AuthenticationMode: API  # API-only mode; no aws-auth ConfigMap, managed entirely via Access Entries
+        BootstrapClusterCreatorAdminPermissions: false  # admin access is granted explicitly via AdminAccessEntry below
       EncryptionConfig:
         - Provider:
             KeyArn: !GetAtt EtcdEncryptionKey.Arn
           Resources:
-            - secrets
+            - secrets  # only Secrets are envelope-encrypted; other resources use EKS-managed encryption
       ResourcesVpcConfig:
         SubnetIds:
           - Fn::ImportValue: !Sub '${VpcStackName}-PrivateSubnet1Id'
@@ -112,51 +97,33 @@ Resources:
           - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet1Id'
           - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet2Id'
           - Fn::ImportValue: !Sub '${VpcStackName}-PublicSubnet3Id'
-        EndpointPublicAccess: true  # Let run kubectl.
-        EndpointPrivateAccess: true # Let nodes use endpoint to talk to the API server.
+        EndpointPublicAccess: true   # allows kubectl from outside the VPC (locked down by IAM, not network)
+        EndpointPrivateAccess: true  # nodes and in-cluster components reach the API via private endpoint
       Logging:
         ClusterLogging:
           EnabledTypes:
-            # api: all API server requests (read + write). Essential for tracing
-            # unexpected changes and debugging admission webhook issues.
             - Type: api
-            # audit: Kubernetes audit log. The primary security record — who did
-            # what, when, from where. Required for any incident investigation.
             - Type: audit
-            # authenticator: IAM-based authentication attempts (Access Entries,
-            # IRSA token exchange). Surfaces credential misuse and failed auth.
             - Type: authenticator
-            # controllerManager: reconciliation loops, node lifecycle events, and
-            # garbage collection. Critical for diagnosing scheduling failures and
-            # stuck finalizers.
             - Type: controllerManager
-            # scheduler: placement decisions, unschedulable events, preemption.
-            # Required to understand why pods are Pending.
             - Type: scheduler
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}
 
-  # -- OIDC Provider --
-  # Enables IAM Roles for Service Accounts for pods to assume IAM roles without static creds.
-  # Needed for CSI driver (n8n SA), CNPG backup, etc.
+  # OIDC provider enables IRSA (IAM Roles for Service Accounts). Required by the EBS CSI driver.
   OIDCProvider:
     Type: AWS::IAM::OIDCProvider
     Properties:
       Url: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
       ClientIdList:
         - sts.amazonaws.com
-      # EKS OIDC endpoints use Amazon-managed certificates.
       ThumbprintList:
-        - 9e99a48a9960b14926bb7f3b02e22da2b0ab7280  # Accepted for all EKS clusters across regions.
+        - 9e99a48a9960b14926bb7f3b02e22da2b0ab7280
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-oidc
 
-  # -- CoreDNS Add-on --
-  # BootstrapSelfManagedAddons: false skips all default add-ons including CoreDNS.
-  # CoreDNS must be installed explicitly as a managed add-on so that in-cluster DNS
-  # works. Pods stay Pending until nodes join; the add-on itself registers immediately.
   CoreDnsAddon:
     Type: AWS::EKS::Addon
     DependsOn: EKSCluster
@@ -168,9 +135,7 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-coredns
 
-  # -- EBS CSI Driver --
-  # Required for any workload that needs persistent volumes (e.g. CNPG database clusters).
-  # The driver runs as a DaemonSet in kube-system and uses IRSA to call EC2/EBS APIs.
+  # EBS CSI driver uses IRSA (not Pod Identity) because it runs in kube-system before Pod Identity agent starts.
   EbsCsiDriverRole:
     Type: AWS::IAM::Role
     DependsOn: OIDCProvider
@@ -218,9 +183,7 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-ebs-csi-driver
 
-  # -- Pod Identity Agent --
-  # Required for EKS Pod Identity. Runs as a DaemonSet on each node and provides
-  # short-lived credentials to pods based on PodIdentityAssociation resources.
+  # Pod Identity agent runs as a DaemonSet; intercepts credential requests from pods via a local socket.
   PodIdentityAgentAddon:
     Type: AWS::EKS::Addon
     DependsOn: EKSCluster
@@ -232,11 +195,8 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-pod-identity-agent
 
-  # -- Secrets Store CSI Driver Add-on --
-  # AWS-managed add-on that installs both the CSI driver and the AWS Secrets Manager provider.
-  # Replaces manual Helm installs; AWS handles versioning and security patches.
-  # syncSecret enables secretObjects, which creates K8s Secrets from mounted secrets
-  # (required for CNPG bootstrap credentials).
+  # Secrets Store CSI driver with syncSecret enabled so CSI-mounted secrets are also synced as K8s Secrets.
+  # The sync is required because CNPG reads the DB credentials from a K8s Secret, not a CSI volume.
   CsiSecretsStoreAddon:
     Type: AWS::EKS::Addon
     DependsOn: EKSCluster
@@ -249,39 +209,24 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-csi-secrets-store
 
-  # -- GuardDuty Detector --
-  # Enables Amazon GuardDuty for this account/region with EKS-specific threat detection.
-  # EKS_AUDIT_LOGS analyzes Kubernetes audit logs for suspicious API activity
-  # (privilege escalation, credential exposure, anomalous API calls).
-  # EKS_RUNTIME_MONITORING runs an eBPF-based agent on each node to detect malicious
-  # process behaviour, unexpected network connections, and file system tampering at runtime.
-  # EKS_ADDON_MANAGEMENT lets GuardDuty automatically install and update the monitoring
-  # agent as an EKS add-on (aws-guardduty-agent DaemonSet in amazon-guardduty namespace),
-  # removing the need to manage agent lifecycle manually.
+  # GuardDuty with EKS audit log analysis and runtime monitoring via eBPF agent.
+  # EKS_ADDON_MANAGEMENT lets GuardDuty install and upgrade the eBPF agent automatically as an EKS add-on.
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
     Properties:
       Enable: true
-      # Publish new findings to EventBridge every 6 hours (default); reduce to ONE_HOUR
-      # or FIFTEEN_MINUTES for faster alerting in production.
       FindingPublishingFrequency: SIX_HOURS
       Features:
-        # Analyses Kubernetes audit logs forwarded from EKS to detect control-plane threats.
         - Name: EKS_AUDIT_LOGS
           Status: ENABLED
-        # Deploys an eBPF sensor on each node via an EKS add-on for runtime threat detection.
         - Name: EKS_RUNTIME_MONITORING
           Status: ENABLED
           AdditionalConfiguration:
-            # GuardDuty automatically installs and upgrades the monitoring agent add-on.
             - Name: EKS_ADDON_MANAGEMENT
               Status: ENABLED
 
-  # -- Admin Access Entry --
-  # Grants cluster-admin to the principal that deploys this stack (e.g. a CI/CD role
-  # or a developer's IAM role). Access Entries replace the aws-auth ConfigMap; they
-  # are validated by the AWS API and auditable via CloudTrail without touching kubectl.
-  # Additional entries can be added via the EKS console, CLI, or CloudFormation.
+  # Grants cluster-admin to the IAM role/user that runs make deploy-eks.
+  # Uses Access Entries (not aws-auth ConfigMap) so cluster access survives ConfigMap corruption.
   AdminAccessEntry:
     Type: AWS::EKS::AccessEntry
     DependsOn: EKSCluster

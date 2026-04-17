@@ -3,19 +3,13 @@ kind: StorageClass
 metadata:
   name: gp3-encrypted
   annotations:
-    # Set as the cluster default so any PVC without an explicit storageClassName
-    # gets an encrypted volume automatically.
-    storageclass.kubernetes.io/is-default-class: "true"
+    storageclass.kubernetes.io/is-default-class: "true"  # used by all PVCs that don't specify a class
 provisioner: ebs.csi.aws.com
 parameters:
   type: gp3
-  # gp3 baseline: 3000 IOPS / 125 MiB/s at no extra cost vs gp2.
-  # Explicitly set so the values are visible and intentional.
-  iops: "3000"
-  throughput: "125"
-  # Encrypt the EBS volume with the account's default EBS KMS key.
-  # To use a customer-managed key add: kmsKeyId: <key-arn>
-  encrypted: "true"
-reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer
+  iops: "3000"       # gp3 baseline; can be raised independently of volume size (unlike gp2)
+  throughput: "125"  # MiB/s baseline
+  encrypted: "true"  # AES-256 encryption via AWS-managed key
+reclaimPolicy: Delete          # PVC deletion also deletes the EBS volume
+volumeBindingMode: WaitForFirstConsumer  # volume is created in the same AZ as the pod; avoids cross-AZ attachment
 allowVolumeExpansion: true

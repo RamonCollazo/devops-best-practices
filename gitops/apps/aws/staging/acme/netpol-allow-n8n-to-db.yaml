@@ -8,11 +8,9 @@ spec:
     matchLabels:
       app.kubernetes.io/name: n8n
   egress:
-    # n8n connects to the CNPG read-write service (PostgreSQL on port 5432).
-    # cnpg.io/cluster selects all pods belonging to the acme-db cluster.
     - toEndpoints:
         - matchLabels:
-            cnpg.io/cluster: acme-db
+            cnpg.io/cluster: acme-db  # matches all CNPG pods (primary and replicas) in this cluster
       toPorts:
         - ports:
             - port: "5432"

@@ -2,7 +2,8 @@
 
 Reference: [AWS EKS Best Practices: Runtime Security](https://docs.aws.amazon.com/eks/latest/best-practices/runtime-security.html)
 
----
+See [best-practices-traceability.md](best-practices-traceability.md) for a table mapping every best practice to the exact file and config.
+
 
 ## Implemented Practices
 
@@ -56,7 +57,6 @@ The Kubernetes API server, container runtime, and Linux kernel are all potential
 
 The guide's primary recommendation for EKS runtime security is GuardDuty because it requires zero manual seccomp profile authoring, zero AppArmor profile management, and no third-party agent to maintain. The eBPF sensor is read-only with minimal CPU/memory overhead and does not intercept the syscall path (no latency impact).
 
----
 
 ### 2. Seccomp RuntimeDefault Profile (Existing)
 
@@ -72,7 +72,6 @@ The Pod Security Admission `restricted` profile (applied to the `acme` namespace
 
 This is the first layer of runtime defence: GuardDuty detects anomalous behaviour; seccomp prevents the kernel from executing the syscall in the first place.
 
----
 
 ### 3. Linux Capabilities Dropped (Existing)
 
@@ -95,7 +94,6 @@ All Linux capabilities are dropped from application containers. Capabilities are
 
 PSA `restricted` enforces this at the admission level, so misconfigured workloads that forget to drop capabilities are rejected at deployment time, not just at runtime.
 
----
 
 ### 4. SELinux via Bottlerocket (Existing)
 
@@ -114,7 +112,6 @@ Key protections from Bottlerocket's SELinux policy:
 
 SELinux + seccomp + capability dropping provides defence-in-depth where each layer is independent: bypassing one does not bypass the others.
 
----
 
 ## Future Work
 

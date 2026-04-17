@@ -4,11 +4,11 @@ metadata:
   name: default-deny
   namespace: acme
 spec:
-  # Empty endpointSelector matches every pod in the namespace.
-  # A single empty rule {} enables policy enforcement on both directions
-  # without matching any traffic, effectively denying all flows not
-  # explicitly allowed by subsequent policies.
+  # Empty selector matches all pods in the namespace.
   endpointSelector: {}
+  # Empty rule lists mean: match nothing. Combined with the selector above, this establishes
+  # a default-deny baseline for all ingress and egress in the namespace.
+  # All allowed traffic must be explicitly permitted by other policies.
   ingress:
     - {}
   egress:

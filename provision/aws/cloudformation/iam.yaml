@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: IAM roles for EKS Pod Identity, grants pods cloud permissions without static credentials
+Description: IAM roles for EKS Pod Identity - grants pods cloud permissions without static credentials
 
 Parameters:
   ProjectName:
@@ -12,12 +12,9 @@ Parameters:
     Description: Deployment environment
 
 Resources:
-  # -- Secrets Reader Role --
-  # Assumed by app ServiceAccounts (e.g. n8n) via EKS Pod Identity.
-  # The Pod Identity Agent on each node exchanges the pod's identity for short-lived
-  # AWS credentials - no OIDC provider or SA annotation required.
-  # PodIdentityAssociations (one per customer namespace) link this role to the n8n SA.
-  # Create associations with: make create-pod-identity-association NAMESPACE=<customer>
+  # Pod Identity role for n8n pods to read customer secrets from Secrets Manager.
+  # Bound to specific secrets via the resource ARN pattern (*-n8n-*); each customer
+  # namespace creates a Pod Identity association that binds its service account to this role.
   SecretsReaderRole:
     Type: AWS::IAM::Role
     Properties:
@@ -27,10 +24,10 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: pods.eks.amazonaws.com
+              Service: pods.eks.amazonaws.com  # Pod Identity trust principal (not sts.amazonaws.com)
             Action:
               - sts:AssumeRole
-              - sts:TagSession
+              - sts:TagSession  # required for Pod Identity to inject session tags (namespace, service account)
       Policies:
         - PolicyName: SecretsManagerReadOnly
           PolicyDocument:
@@ -38,12 +35,9 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - secretsmanager:GetSecretValue       # Read secret value
-                  - secretsmanager:DescribeSecret       # Read metadata (name, ARN, tags)
-                  - secretsmanager:ListSecretVersionIds # List versions for rotation support
-                # Scope to secrets that follow the per-customer n8n naming convention:
-                # <customer>-n8n-db-user, <customer>-n8n-db-password, <customer>-n8n-encryption-key
-                # AWS appends a random 6-char suffix to secret ARNs - the trailing wildcard covers it.
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecretVersionIds
                 Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-n8n-*'
       Tags:
         - Key: Name

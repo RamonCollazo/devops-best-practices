@@ -1,6 +1,4 @@
 crds:
-  enabled: true
-# GatewayAPI feature gate was removed in v1.15 (graduated to stable), but the
-# --enable-gateway-api controller flag is still required to activate the integration.
+  enabled: true  # cert-manager manages its own CRD lifecycle
 extraArgs:
-  - --enable-gateway-api
+  - --enable-gateway-api  # enables Certificate and HTTPRoute integration with Kubernetes Gateway API

@@ -1,8 +1,11 @@
 # Infrastructure Security
 
-Reference: [AWS EKS Best Practices: Protecting the Infrastructure](https://docs.aws.amazon.com/eks/latest/best-practices/protecting-the-infrastructure.html)
+References:
+- [AWS EKS Best Practices: Protecting the Infrastructure](https://docs.aws.amazon.com/eks/latest/best-practices/protecting-the-infrastructure.html)
+- [AWS EKS Best Practices: Auditing and Logging](https://docs.aws.amazon.com/eks/latest/best-practices/auditing-and-logging.html)
 
----
+See [best-practices-traceability.md](best-practices-traceability.md) for a table mapping every best practice to the exact file and config.
+
 
 ## Implemented Practices
 
@@ -39,7 +42,6 @@ The change from `AL2023_x86_64_STANDARD` to `BOTTLEROCKET_x86_64` is a single fi
 CloudFormation. EKS manages the AMI version through the managed node group lifecycle -
 node replacement on updates is handled by `UpdateConfig.MaxUnavailable: 1`.
 
----
 
 ### 2. SSM Session Manager for Node Access
 
@@ -74,7 +76,6 @@ With Bottlerocket, SSM connects into the admin container, which provides a privi
 shell into the host. This is the only supported method for interactive node access on
 Bottlerocket; there is no SSH daemon to configure.
 
----
 
 ### 3. Workers on Private Subnets
 
@@ -98,7 +99,6 @@ security groups, direct internet exposure is unnecessary and increases attack su
 Gateways allow nodes to pull container images and call AWS APIs while remaining
 unreachable from the public internet.
 
----
 
 ### 4. Immutable Infrastructure (Node Replacement over In-Place Upgrades)
 
@@ -122,7 +122,6 @@ provisioned node from the same AMI. Node replacement guarantees that every runni
 matches the current AMI definition exactly. Combined with Bottlerocket's read-only OS
 partition, there is no mechanism for untracked changes to accumulate on a node.
 
----
 
 ## Not Implemented (Noted for Awareness)
 

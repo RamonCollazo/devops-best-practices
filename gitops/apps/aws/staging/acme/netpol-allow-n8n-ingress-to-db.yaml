@@ -4,9 +4,6 @@ metadata:
   name: allow-n8n-ingress-to-db
   namespace: acme
 spec:
-  # The default-deny policy blocks all ingress including to CNPG pods.
-  # This policy pairs with allow-n8n-to-db (egress side) to complete the
-  # bidirectional allow for PostgreSQL connections from n8n to acme-db.
   endpointSelector:
     matchLabels:
       cnpg.io/cluster: acme-db

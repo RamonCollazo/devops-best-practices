@@ -4,17 +4,12 @@ metadata:
   name: allow-cnpg-operator
   namespace: acme
 spec:
-  # Allow the CNPG operator (running in cnpg-system) to reach the instance manager
-  # HTTP API on port 8000 of each PostgreSQL pod. The operator uses this endpoint
-  # for health checks, status extraction, and lifecycle management. Without this
-  # policy the default-deny rule blocks the operator and causes "HTTP communication
-  # issue" errors on the Cluster resource.
-  # Cilium's io.kubernetes.pod.namespace label is automatically injected into every
-  # endpoint identity, so toEndpoints/fromEndpoints can match by namespace directly.
   endpointSelector:
     matchLabels:
       cnpg.io/cluster: acme-db
   ingress:
+    # CNPG operator (in cnpg-system) reaches into customer namespaces on port 8000
+    # for health checks, webhook calls, and cluster reconciliation.
     - fromEndpoints:
         - matchLabels:
             io.kubernetes.pod.namespace: cnpg-system

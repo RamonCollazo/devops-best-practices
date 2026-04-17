@@ -4,12 +4,7 @@ metadata:
   name: allow-dns
   namespace: acme
 spec:
-  # All pods in the namespace need DNS resolution.
-  # Cilium injects io.kubernetes.pod.namespace into every endpoint identity,
-  # so fromEndpoints/toEndpoints can match by namespace without a separate
-  # namespaceSelector. Both labels in the matchLabels entry are ANDed,
-  # selecting only kube-dns pods inside kube-system.
-  endpointSelector: {}
+  endpointSelector: {}  # applies to all pods; every pod needs DNS
   egress:
     - toEndpoints:
         - matchLabels:

@@ -16,45 +16,26 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${ProjectName}-${Environment}-cnpg-backups-${AWS::AccountId}
-      # Block all public access - backups must never be publicly accessible.
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      # AES-256 encryption at rest with S3-managed keys.
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      # Versioning protects against accidental overwrites or Barman-side deletions.
-      # If an object is deleted by mistake, the previous version remains recoverable.
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          # Remove non-current object versions after 30 days.
-          # Versioning keeps the previous version of any overwritten/deleted object.
-          # CnpgBackupRole only holds s3:DeleteObject (not s3:DeleteObjectVersion), so
-          # deletion via a compromised role only creates delete markers - previous versions
-          # remain recoverable. 30 days aligns with the Barman retentionPolicy so the
-          # full backup window is always recoverable after an accidental or malicious deletion.
           - Id: ExpireNonCurrentVersions
             Status: Enabled
             NoncurrentVersionExpiration:
-              NoncurrentDays: 30
-          # Hard-expire all objects after 35 days.
-          # Barman retention (see ScheduledBackup retentionPolicy: 30d) deletes old
-          # backup objects from within the application. This S3 rule is a safety net
-          # that catches any orphaned objects Barman fails to clean up, keeping the
-          # bucket from growing unbounded. 35 days (30 + 5 buffer) ensures Barman
-          # always has a chance to clean up before S3 expires anything.
+              NoncurrentDays: 30  # matches the Barman retentionPolicy (30d) so the full backup window is recoverable after deletion
           - Id: ExpireOldBackups
             Status: Enabled
-            ExpirationInDays: 35
-          # Clean up incomplete multipart uploads older than 1 day.
-          # Large WAL segments are uploaded in parts; failed uploads leave orphaned
-          # parts that incur storage charges without contributing usable data.
+            ExpirationInDays: 35  # safety net: 30d retention + 5d buffer for Barman cleanup
           - Id: AbortIncompleteMultipartUploads
             Status: Enabled
             AbortIncompleteMultipartUpload:
@@ -65,10 +46,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # -- CNPG Backup Role --
-  # Assumed by the CNPG Cluster ServiceAccount (named after the cluster, e.g. acme-db)
-  # via EKS Pod Identity. Scoped exclusively to the backup bucket in this stack.
-  # PodIdentityAssociation per customer: make create-cnpg-backup-association NAMESPACE=acme
   CnpgBackupRole:
     Type: AWS::IAM::Role
     Properties:
@@ -87,14 +64,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Object-level operations - scoped to this bucket only.
               - Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                  - s3:DeleteObject
+                  - s3:DeleteObject  # s3:DeleteObject with versioning creates delete markers only; permanent deletion requires s3:DeleteObjectVersion which is not granted
                 Resource: !Sub ${CnpgBackupBucket.Arn}/*
-              # Bucket-level operations - required by Barman for listing and location checks.
               - Effect: Allow
                 Action:
                   - s3:ListBucket

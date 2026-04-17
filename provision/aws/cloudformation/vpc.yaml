@@ -21,13 +21,12 @@ Parameters:
     Description: EKS cluster name (used for subnet tags)
 
 Resources:
-  # -- VPC --
   VPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
-      EnableDnsHostnames: true  # Required for EKS nodes to resolve AWS service endpoints
-      EnableDnsSupport: true    # Required for EKS nodes to resolve AWS service endpoints
+      EnableDnsHostnames: true  # required for EKS node registration and CoreDNS
+      EnableDnsSupport: true
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-vpc
@@ -45,8 +44,8 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # -- Public Subnets --
-  # Used for NAT Gateways and internet-facing load balancers.
+  # Public subnets: ELB nodes and NAT Gateways only. EKS worker nodes never go here.
+  # kubernetes.io/role/elb tag tells the AWS load balancer controller which subnets to use for public ELBs.
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -92,8 +91,8 @@ Resources:
         - Key: kubernetes.io/role/elb
           Value: '1'
 
-  # -- Private Subnets --
-  # EKS nodes live here
+  # Private subnets: all EKS worker nodes. No direct internet access; egress via NAT Gateway.
+  # kubernetes.io/role/internal-elb tag is for internal load balancers if needed in the future.
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -139,8 +138,7 @@ Resources:
         - Key: kubernetes.io/role/internal-elb
           Value: '1'
 
-  # -- NAT Gateways --
-  # One per AZ for HA
+  # One NAT Gateway per AZ for HA egress. Private subnets in each AZ route to their own NAT.
   NatEIP1:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -195,7 +193,7 @@ Resources:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-nat-3
 
-  # -- Route Tables --
+  # Single shared route table for all public subnets; all route to the IGW.
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -230,7 +228,8 @@ Resources:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
 
-  # Private route tables, each AZ routes through its local NAT Gateway
+  # Each private subnet gets its own route table so it routes through the NAT in the same AZ.
+  # This keeps egress traffic within the AZ and avoids cross-AZ NAT data transfer costs.
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:

@@ -4,9 +4,8 @@ metadata:
   name: shared-gateway
   namespace: shared-gateway
 spec:
-  gatewayClassName: cilium
+  gatewayClassName: cilium  # uses Cilium's built-in Envoy-based Gateway API implementation
   listeners:
-    # HTTP listener - used by cert-manager for HTTP01 ACME challenges.
     - name: http
       port: 80
       protocol: HTTP
@@ -15,17 +14,14 @@ spec:
           from: Selector
           selector:
             matchLabels:
-              shared-gateway: "true"
-    # HTTPS listener - serves app traffic with TLS terminated at the Gateway.
-    # The acme-tls secret is created by cert-manager in this namespace.
-    # Phase 4: replace per-customer certs with a wildcard cert + DNS01/Route53.
+              shared-gateway: "true"  # only namespaces with this label can attach HTTPRoutes
     - name: https
       port: 443
       protocol: HTTPS
       tls:
         mode: Terminate
         certificateRefs:
-          - name: acme-tls
+          - name: acme-tls  # TLS secret must be in the shared-gateway namespace (where the Gateway reads it)
       allowedRoutes:
         namespaces:
           from: Selector

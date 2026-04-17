@@ -2,7 +2,8 @@
 
 Reference: [AWS EKS Best Practices: Network Security](https://docs.aws.amazon.com/eks/latest/best-practices/network-security.html)
 
----
+See [best-practices-traceability.md](best-practices-traceability.md) for a table mapping every best practice to the exact file and config.
+
 
 ## Implemented Practices
 
@@ -37,7 +38,6 @@ explicitly declared.
 This is the recommended starting point from the AWS EKS best practices guide and from
 the Kubernetes NetworkPolicy documentation.
 
----
 
 ### 2. Allow DNS
 
@@ -72,7 +72,6 @@ Without DNS egress, pods cannot resolve service names or external hostnames, bre
 almost all application functionality. This policy must be added before any other allow
 rules because DNS is a prerequisite for every subsequent network call.
 
----
 
 ### 3. Allow Gateway to Application (Ingress)
 
@@ -110,7 +109,6 @@ host-network processes) while blocking all external sources. The security bounda
 external access is the ELB and Cilium Gateway, which enforce hostname, TLS, and routing
 rules before proxying to the application.
 
----
 
 ### 4. Allow Application to Database (Egress)
 
@@ -143,7 +141,6 @@ The application needs database access and nothing else in the cluster. By select
 `cnpg.io/cluster` label rather than an IP range, the policy remains correct as pods are
 rescheduled. Any other egress within the cluster is blocked.
 
----
 
 ### 5. Allow Database Ingress from Application
 
@@ -175,7 +172,6 @@ TCP connections require both an egress rule on the source and an ingress rule on
 destination. The default-deny policy blocks all ingress including to CNPG pods. Without
 this policy the database connection is rejected even though n8n has egress permission.
 
----
 
 ### 6. Allow CNPG Operator Access
 
@@ -208,7 +204,6 @@ lifecycle management. Without this policy the default-deny blocks the operator, 
 "HTTP communication issue" errors on the Cluster resource and preventing the cluster from
 becoming healthy.
 
----
 
 ### 7. Allow Application HTTPS Egress
 
@@ -243,7 +238,6 @@ addressing and is outside the scope of network policy enforcement regardless.
 Restricting egress to specific FQDNs is possible with Cilium's `toFQDNs` rules - see
 Future Work below.
 
----
 
 ### 8. Allow Database HTTPS Egress (Backups)
 
@@ -274,7 +268,6 @@ CNPG instances need to write backups to S3 over HTTPS. Without this rule the Bar
 plugin cannot connect to S3 and backups fail. CNPG pod AWS credentials are provided by
 Pod Identity via link-local and are outside network policy scope.
 
----
 
 ## Traffic Map - acme Namespace
 
@@ -297,7 +290,6 @@ Internet
 All pods:  UDP/TCP:53 -> [CoreDNS - kube-system]
 ```
 
----
 
 ## Not Applicable
 
@@ -307,7 +299,6 @@ All pods:  UDP/TCP:53 -> [CoreDNS - kube-system]
 - **Service mesh / mTLS:** Not implemented in this phase. TLS is terminated at the Gateway;
   traffic between the Gateway and the application pod is inside the VPC on private ENI IPs.
 
----
 
 ## Future Work
 

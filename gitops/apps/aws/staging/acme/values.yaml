@@ -1,32 +1,26 @@
-# Use external CNPG cluster instead of the bundled Bitnami PostgreSQL.
+# n8n Helm values for the acme customer namespace.
+# Uses external PostgreSQL (CNPG cluster acme-db) instead of the bundled PostgreSQL chart.
+
 postgresql:
-  enabled: false
+  enabled: false  # disabled; CNPG manages the database separately
 
 db:
   type: postgresdb
 
 externalPostgresql:
-  host: acme-db-rw   # CNPG read-write service in the same namespace
+  host: acme-db-rw   # CNPG creates this service pointing to the current primary
   port: 5432
   database: n8n
   username: n8n
-  # Secret created by the CSI driver when the pod first mounts the volume.
-  # The chart reads the "postgres-password" key from this secret.
-  existingSecret: acme-n8n-db
+  existingSecret: acme-n8n-db  # synced from Secrets Manager by the CSI driver
 
-# Secret created by CSI driver. Loaded via envFrom - all keys become env vars.
-# Key N8N_ENCRYPTION_KEY is read directly by n8n from the environment.
-existingEncryptionKeySecret: acme-n8n-secrets
+existingEncryptionKeySecret: acme-n8n-secrets  # contains N8N_ENCRYPTION_KEY, loaded via envFrom
 
 serviceAccount:
-  # Managed by serviceaccount.yaml (Kustomize) so we can set automountServiceAccountToken: false.
-  # Helm does not support that field, so we own the SA and tell the chart not to create one.
-  create: false
+  create: false  # service account is managed in serviceaccount.yaml with Pod Identity binding
   name: n8n
 
-# Pod-level security context applied to all containers in the n8n pod.
-# runAsNonRoot + runAsUser match the node user baked into the n8n image (UID 1000).
-# seccompProfile RuntimeDefault uses the container runtime's built-in syscall filter.
+# PSA restricted profile requires runAsNonRoot and seccompProfile.
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -35,9 +29,6 @@ podSecurityContext:
   seccompProfile:
     type: RuntimeDefault
 
-# Container-level security context.
-# allowPrivilegeEscalation: false prevents setuid/setgid binaries from gaining extra rights.
-# capabilities.drop: [ALL] removes every Linux capability; n8n is a Node.js app and needs none.
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -45,10 +36,8 @@ securityContext:
       - ALL
   readOnlyRootFilesystem: true
 
-# n8n performs DB migrations on first start which can take 30-60 seconds.
-# Without an initial delay the liveness probe kills the container before it is ready.
 livenessProbe:
-  initialDelaySeconds: 60
+  initialDelaySeconds: 60  # n8n takes ~30–60s to initialize on first start
   periodSeconds: 10
   failureThreshold: 5
 
@@ -57,8 +46,6 @@ readinessProbe:
   periodSeconds: 10
   failureThreshold: 5
 
-# Resource requests and limits prevent a single n8n instance from starving other
-# workloads or triggering node eviction. Adjust limits based on workflow load.
 resources:
   requests:
     cpu: 100m
@@ -67,16 +54,14 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# Mount the CSI volume to trigger SecretProviderClass reconciliation and K8s Secret
-# creation (acme-db-credentials for CNPG, acme-n8n-db and acme-n8n-secrets for n8n).
-# emptyDir volumes provide writable scratch space required by readOnlyRootFilesystem: true.
 volumes:
   - name: secrets-store
     csi:
       driver: secrets-store.csi.k8s.io
       readOnly: true
       volumeAttributes:
-        secretProviderClass: acme-secrets
+        secretProviderClass: acme-secrets  # triggers secret sync from Secrets Manager on pod start
+  # readOnlyRootFilesystem requires writable mounts for every path n8n writes to.
   - name: n8n-data
     emptyDir: {}
   - name: n8n-cache
