@@ -8,6 +8,11 @@ spec:
   schedule: "0 2 * * *"
   # The backup object is owned by this ScheduledBackup (cleaned up together).
   backupOwnerReference: self
+  # Keep 30 days of backups. CNPG/Barman automatically deletes base backups and
+  # associated WAL segments older than this window after each successful backup.
+  # The S3 lifecycle rule (35-day expiry) acts as a safety net for any objects
+  # Barman fails to clean up.
+  retentionPolicy: "30d"
   cluster:
     name: acme-db
   method: plugin

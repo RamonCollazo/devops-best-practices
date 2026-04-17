@@ -117,9 +117,22 @@ Resources:
       Logging:
         ClusterLogging:
           EnabledTypes:
-            # Minimum needed for security visibility.
+            # api: all API server requests (read + write). Essential for tracing
+            # unexpected changes and debugging admission webhook issues.
             - Type: api
+            # audit: Kubernetes audit log. The primary security record — who did
+            # what, when, from where. Required for any incident investigation.
             - Type: audit
+            # authenticator: IAM-based authentication attempts (Access Entries,
+            # IRSA token exchange). Surfaces credential misuse and failed auth.
+            - Type: authenticator
+            # controllerManager: reconciliation loops, node lifecycle events, and
+            # garbage collection. Critical for diagnosing scheduling failures and
+            # stuck finalizers.
+            - Type: controllerManager
+            # scheduler: placement decisions, unschedulable events, preemption.
+            # Required to understand why pods are Pending.
+            - Type: scheduler
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}

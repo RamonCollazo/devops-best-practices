@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: n8n
+  namespace: acme
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: n8n
+  # maxUnavailable: 1 allows node drains to proceed even with a single replica
+  # (staging). In production with multiple replicas, switch to minAvailable: 1
+  # to guarantee at least one instance stays up during rolling node maintenance.
+  maxUnavailable: 1

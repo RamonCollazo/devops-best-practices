@@ -8,7 +8,11 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: ebs.csi.aws.com
 parameters:
-  type: gp2
+  type: gp3
+  # gp3 baseline: 3000 IOPS / 125 MiB/s at no extra cost vs gp2.
+  # Explicitly set so the values are visible and intentional.
+  iops: "3000"
+  throughput: "125"
   # Encrypt the EBS volume with the account's default EBS KMS key.
   # To use a customer-managed key add: kmsKeyId: <key-arn>
   encrypted: "true"

@@ -254,10 +254,11 @@ install-barman-plugin:
 	kubectl apply -f https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/$(BARMAN_PLUGIN_VERSION)/manifest.yaml
 	kubectl wait --for=condition=Established crd/objectstores.barmancloud.cnpg.io --timeout=60s
 
-# NOTE: Run make deploy-nodegroup after install-cilium and before the rest.
-# cert-manager is managed by Flux - do NOT install it manually.
-# CSI driver and AWS provider are managed by Flux (not installed manually).
-install-controllers: helm-repos install-gateway-api-crds install-cilium install-cnpg install-barman-plugin
+# NOTE: Run make deploy-nodegroup after install-cilium and before flux-bootstrap.
+# cert-manager and CNPG are managed by Flux - do NOT install them manually.
+# install-barman-plugin must run after flux-bootstrap (requires cert-manager CRDs).
+# CSI driver and AWS provider are EKS managed add-ons (not installed manually).
+install-controllers: helm-repos install-gateway-api-crds install-cilium
 
 # -- GitOps --
 # Creates a ConfigMap in flux-system with cluster-specific values.

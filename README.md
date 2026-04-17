@@ -67,7 +67,10 @@ make helm-repos
 # 6. Gateway API CRDs - must run before Cilium
 make install-gateway-api-crds
 
-# 7. Install Cilium - must run before nodes join
+# 7. Install Cilium - must run before nodes join.
+#    This is the only controller installed manually. Cilium is a bootstrap dependency:
+#    nodes cannot join without a CNI, and Flux cannot run without nodes. After bootstrap,
+#    Flux takes over Cilium management via HelmRelease.
 make install-cilium
 
 # 8. Node group - nodes join and get networking from Cilium
@@ -76,24 +79,21 @@ make deploy-nodegroup
 # 9. IAM roles (SecretsReaderRole)
 make deploy-iam
 
-# 10. Controllers (cert-manager is Flux-managed - do NOT install manually)
-make install-cnpg
-make install-barman-plugin
-
-# 11. Bootstrap Flux (requires GITHUB_TOKEN)
+# 10. Bootstrap Flux (requires GITHUB_TOKEN)
+#     Flux reconciles infrastructure-controllers first, which brings up cert-manager
+#     and CNPG via HelmRelease. Do NOT install these manually.
 export GITHUB_TOKEN=<your-pat>
 make flux-bootstrap
 
-# 12. Cluster-wide ConfigMap for Flux variable substitution
+# 11. Cluster-wide ConfigMap for Flux variable substitution
 #     Run after deploy-s3 so cnpgBackupBucket is available
 make create-cluster-vars
 
-# 13. Point DNS: grafana-staging.aws.raymondcollazo.com → Gateway LoadBalancer hostname
-#     Retrieve Grafana admin password after monitoring reconciles:
-#       kubectl get secret -n monitoring kube-prometheus-stack-grafana \
-#         -o jsonpath='{.data.admin-password}' | base64 -d
+# 12. Barman Cloud plugin - install after Flux bootstrap so cert-manager CRDs are present
+#     (the plugin manifest includes Certificate and Issuer resources)
+make install-barman-plugin
 
-# 14. Per-customer setup (repeat for each customer)
+# 13. Per-customer setup (repeat for each customer)
 # a) Create secrets in AWS Secrets Manager:
 #      <customer>-n8n-db-user
 #      <customer>-n8n-db-password
@@ -108,8 +108,9 @@ make create-cnpg-backup-association NAMESPACE=<customer>
 > **Note:** Cilium must be running before nodes join. If nodes join without a CNI they sit
 > in `NotReady` indefinitely. Always run `install-cilium` before `deploy-nodegroup`.
 
-> **Note:** Do not run `make install-cert-manager` after `flux-bootstrap`. Flux owns
-> cert-manager from that point - running it again creates a conflicting Helm release.
+> **Note:** cert-manager and CNPG are Flux-managed — do NOT install them manually.
+> Flux deploys both via HelmRelease as part of `infrastructure-controllers`. Installing
+> manually before bootstrap creates a duplicate Helm release that conflicts with Flux.
 
 ### Makefile variables
 

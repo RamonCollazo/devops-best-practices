@@ -27,6 +27,36 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      # Versioning protects against accidental overwrites or Barman-side deletions.
+      # If an object is deleted by mistake, the previous version remains recoverable.
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          # Remove non-current object versions after 7 days.
+          # Versioning keeps the previous version of any overwritten/deleted object;
+          # 7 days provides a short window to recover from accidental deletions without
+          # storing redundant data long-term.
+          - Id: ExpireNonCurrentVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 7
+          # Hard-expire all objects after 35 days.
+          # Barman retention (see ScheduledBackup retentionPolicy: 30d) deletes old
+          # backup objects from within the application. This S3 rule is a safety net
+          # that catches any orphaned objects Barman fails to clean up, keeping the
+          # bucket from growing unbounded. 35 days (30 + 5 buffer) ensures Barman
+          # always has a chance to clean up before S3 expires anything.
+          - Id: ExpireOldBackups
+            Status: Enabled
+            ExpirationInDays: 35
+          # Clean up incomplete multipart uploads older than 1 day.
+          # Large WAL segments are uploaded in parts; failed uploads leave orphaned
+          # parts that incur storage charges without contributing usable data.
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-cnpg-backups-${AWS::AccountId}
