@@ -27,7 +27,7 @@ Reference implementation for a consistent GitOps-driven stack: CNI, TLS, databas
 | Database | CloudNativePG (CNPG) |
 | DB Backups | Barman Cloud plugin → S3 (per environment) |
 | App workload | n8n (one instance per customer namespace) |
-| Monitoring | kube-prometheus-stack + Loki *(planned)* |
+| Monitoring | kube-prometheus-stack + Loki + Promtail |
 
 ### CloudFormation stacks
 
@@ -178,6 +178,7 @@ Barman Cloud plugin is installed via `make install-barman-plugin` (raw manifest,
 clusters/aws/staging/
   infrastructure.yaml   # infrastructure-controllers → infrastructure-configs
   apps.yaml             # apps (depends on infrastructure-configs)
+  monitoring.yaml       # monitoring-controllers → monitoring-configs
 
 gitops/
   infrastructure/
@@ -188,12 +189,20 @@ gitops/
   apps/
     aws/staging/
       <customer>/       # Per-customer manifests (one directory per customer)
+  monitoring/
+    controllers/
+      base/             # HelmReleases: kube-prometheus-stack, Loki, Promtail
+      aws/staging/      # Kustomize overlay
+    configs/
+      base/grafana/     # Grafana TLS Certificate + HTTPRoute
+      aws/staging/      # Kustomize overlay
 ```
 
 ### Flux reconciliation chain
 
 ```
 infrastructure-controllers  →  infrastructure-configs  →  apps
+                                                       →  monitoring-controllers  →  monitoring-configs
 ```
 
 All Kustomizations use `wait: true` - the chain only advances when the previous layer is healthy.
@@ -247,6 +256,41 @@ Each customer gets an isolated namespace with a dedicated n8n instance and CNPG 
 
 ---
 
+## Monitoring
+
+Deployed in the `monitoring` namespace. Managed by Flux via `monitoring-controllers` and `monitoring-configs` Kustomizations, both dependent on `infrastructure-configs`.
+
+### Controllers (`monitoring-controllers`)
+
+| Chart | Version | What it provides |
+|-------|---------|-----------------|
+| `grafana/kube-prometheus-stack` | v72.3.0 | Prometheus, Grafana, Alertmanager, node-exporter, kube-state-metrics |
+| `grafana/loki` | v6.53.0 | Log aggregation backend (SingleBinary mode, filesystem storage on gp2-encrypted PVC) |
+| `grafana/promtail` | v6.17.1 | DaemonSet log collector — tails pod logs from each node, ships to Loki |
+
+### Configs (`monitoring-configs`)
+
+| Resource | What it does |
+|----------|-------------|
+| `Certificate` | TLS cert for `grafana-staging.aws.raymondcollazo.com` via Let's Encrypt |
+| `HTTPRoute` | Routes HTTPS traffic from shared Gateway to Grafana |
+
+### Key details
+
+- **Grafana** is exposed at `https://grafana-staging.aws.raymondcollazo.com`
+- **Loki datasource** is pre-configured in Grafana via `additionalDataSources` in kube-prometheus-stack values
+- **Prometheus** retains metrics for 15 days on a 50 Gi gp2-encrypted PVC
+- **Alertmanager** uses a 2 Gi gp2-encrypted PVC
+- **Loki** uses a 20 Gi gp2-encrypted PVC in SingleBinary mode (single replica, no replication)
+- **Promtail** ships to `http://monitoring-loki.monitoring.svc.cluster.local:3100` (service name is Helm release prefixed with namespace)
+- Admin password: `kubectl get secret -n monitoring monitoring-kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`
+
+### Explore logs in Grafana
+
+Grafana → Explore → select **Loki** datasource → add label filter `namespace` = `<customer>` → Run query.
+
+---
+
 ## Roadmap
 
 - [x] EKS provisioning (VPC, EKS, node group, IAM, S3)
@@ -255,7 +299,7 @@ Each customer gets an isolated namespace with a dedicated n8n instance and CNPG 
 - [x] App stack (acme: CNPG + n8n + HTTPRoute + TLS)
 - [x] CNPG backups (Barman Cloud plugin → S3, restore tested)
 - [x] EKS hardening
-- [ ] Monitoring (kube-prometheus-stack + Loki)
+- [x] Monitoring (kube-prometheus-stack + Loki + Promtail)
 - [ ] Customer onboarding automation (sync-customers.sh)
 - [ ] GCP (Terraform + GKE)
 - [ ] Azure (ARM + AKS)
