@@ -33,14 +33,16 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          # Remove non-current object versions after 7 days.
-          # Versioning keeps the previous version of any overwritten/deleted object;
-          # 7 days provides a short window to recover from accidental deletions without
-          # storing redundant data long-term.
+          # Remove non-current object versions after 30 days.
+          # Versioning keeps the previous version of any overwritten/deleted object.
+          # CnpgBackupRole only holds s3:DeleteObject (not s3:DeleteObjectVersion), so
+          # deletion via a compromised role only creates delete markers - previous versions
+          # remain recoverable. 30 days aligns with the Barman retentionPolicy so the
+          # full backup window is always recoverable after an accidental or malicious deletion.
           - Id: ExpireNonCurrentVersions
             Status: Enabled
             NoncurrentVersionExpiration:
-              NoncurrentDays: 7
+              NoncurrentDays: 30
           # Hard-expire all objects after 35 days.
           # Barman retention (see ScheduledBackup retentionPolicy: 30d) deletes old
           # backup objects from within the application. This S3 rule is a safety net
