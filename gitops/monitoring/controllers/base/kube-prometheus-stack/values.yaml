@@ -8,7 +8,7 @@ grafana:
   additionalDataSources:
     - name: Loki
       type: loki
-      url: http://loki.monitoring.svc.cluster.local:3100
+      url: http://monitoring-loki.monitoring.svc.cluster.local:3100
       access: proxy
 
   # Grafana state (dashboards, alerts) is managed via ConfigMaps and GitOps.
